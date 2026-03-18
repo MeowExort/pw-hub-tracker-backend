@@ -62,7 +62,7 @@ public class ArenaTeamsController(TrackerDbContext db) : ControllerBase
                 {
                     m.PlayerId,
                     m.RewardMoneyInfo
-                }),
+                }).ToList(),
                 BattleStats = db.ArenaBattleStats
                     .Where(s => s.EntityId == t.Id && s.EntityType == EntityType.Team)
                     .Select(s => new
@@ -75,7 +75,7 @@ public class ArenaTeamsController(TrackerDbContext db) : ControllerBase
                         s.WeekWinCount,
                         s.WeekMaxScore,
                         s.Rank
-                    })
+                    }).ToList()
             })
             .FirstOrDefaultAsync();
 
@@ -112,7 +112,7 @@ public class ArenaTeamsController(TrackerDbContext db) : ControllerBase
                             s.WeekWinCount,
                             s.WeekMaxScore,
                             s.Rank
-                        })
+                        }).ToList()
                 }
             })
             .ToListAsync();

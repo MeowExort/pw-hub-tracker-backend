@@ -36,7 +36,7 @@ public class ArenaPlayersController(TrackerDbContext db) : ControllerBase
                         s.WeekWinCount,
                         s.WeekMaxScore,
                         s.Rank
-                    })
+                    }).ToList()
             })
             .FirstOrDefaultAsync();
 
