@@ -1,5 +1,6 @@
 using MassTransit;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using Pw.Hub.Tracker.Infrastructure.Cache;
 using Pw.Hub.Tracker.Infrastructure.Data;
 using Pw.Hub.Tracker.Infrastructure.Messaging;
@@ -8,12 +9,16 @@ using StackExchange.Redis;
 
 var builder = Host.CreateApplicationBuilder(args);
 
+var postgresConnectionString = builder.Configuration.GetConnectionString("Postgres")
+                               ?? "Host=localhost;Port=5432;Database=pw_hub_tracker;Username=postgres;Password=postgres";
+
 builder.Services.AddSingleton<IConnectionMultiplexer>(_ =>
     ConnectionMultiplexer.Connect(builder.Configuration.GetConnectionString("Redis") ?? "localhost:6379"));
 
 builder.Services.AddDbContext<TrackerDbContext>(options =>
-    options.UseNpgsql(builder.Configuration.GetConnectionString("Postgres")));
+    options.UseNpgsql(postgresConnectionString));
 
+builder.Services.AddSingleton(NpgsqlDataSource.Create(postgresConnectionString));
 builder.Services.AddSingleton<ArenaStateCache>();
 builder.Services.AddScoped<ArenaMessageProcessor>();
 
