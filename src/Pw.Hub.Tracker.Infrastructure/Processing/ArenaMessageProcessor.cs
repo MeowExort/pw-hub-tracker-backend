@@ -106,15 +106,15 @@ public class ArenaMessageProcessor(
         }
 
         const string sql = """
-            INSERT INTO arena_teams (id, captain_id, zone_id, name, week_reset_timestamp, last_visite_timestamp, updated_at)
+            INSERT INTO arena_teams ("Id", "CaptainId", "ZoneId", "Name", "WeekResetTimestamp", "LastVisiteTimestamp", "UpdatedAt")
             VALUES (@Id, @CaptainId, @ZoneId, @Name, @WeekResetTimestamp, @LastVisiteTimestamp, @UpdatedAt)
-            ON CONFLICT (id) DO UPDATE SET
-                captain_id = EXCLUDED.captain_id,
-                zone_id = EXCLUDED.zone_id,
-                name = COALESCE(NULLIF(EXCLUDED.name, ''), arena_teams.name),
-                week_reset_timestamp = EXCLUDED.week_reset_timestamp,
-                last_visite_timestamp = EXCLUDED.last_visite_timestamp,
-                updated_at = EXCLUDED.updated_at
+            ON CONFLICT ("Id") DO UPDATE SET
+                "CaptainId" = EXCLUDED."CaptainId",
+                "ZoneId" = EXCLUDED."ZoneId",
+                "Name" = COALESCE(NULLIF(EXCLUDED."Name", ''), arena_teams."Name"),
+                "WeekResetTimestamp" = EXCLUDED."WeekResetTimestamp",
+                "LastVisiteTimestamp" = EXCLUDED."LastVisiteTimestamp",
+                "UpdatedAt" = EXCLUDED."UpdatedAt"
             """;
 
         await connection.ExecuteAsync(sql, new
@@ -136,21 +136,21 @@ public class ArenaMessageProcessor(
         if (incomingIds.Length > 0)
         {
             await connection.ExecuteAsync(
-                "DELETE FROM arena_team_members WHERE team_id = @TeamId AND player_id != ALL(@PlayerIds)",
+                "DELETE FROM arena_team_members WHERE \"TeamId\" = @TeamId AND \"PlayerId\" != ALL(@PlayerIds)",
                 new { TeamId = dto.Id, PlayerIds = incomingIds }, transaction);
         }
         else
         {
             await connection.ExecuteAsync(
-                "DELETE FROM arena_team_members WHERE team_id = @TeamId",
+                "DELETE FROM arena_team_members WHERE \"TeamId\" = @TeamId",
                 new { TeamId = dto.Id }, transaction);
         }
 
         const string sql = """
-            INSERT INTO arena_team_members (team_id, player_id, reward_money_info)
+            INSERT INTO arena_team_members ("TeamId", "PlayerId", "RewardMoneyInfo")
             VALUES (@TeamId, @PlayerId, @RewardMoneyInfo)
-            ON CONFLICT (team_id, player_id) DO UPDATE SET
-                reward_money_info = EXCLUDED.reward_money_info
+            ON CONFLICT ("TeamId", "PlayerId") DO UPDATE SET
+                "RewardMoneyInfo" = EXCLUDED."RewardMoneyInfo"
             """;
 
         foreach (var member in dto.Members)
@@ -167,16 +167,16 @@ public class ArenaMessageProcessor(
     private static async Task UpsertPlayerAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, ArenaPlayerDto dto)
     {
         const string sql = """
-            INSERT INTO arena_players (id, team_id, cls, reward_money, week_reset_timestamp, last_battle_timestamp, last_visite_timestamp, updated_at)
+            INSERT INTO arena_players ("Id", "TeamId", "Cls", "RewardMoney", "WeekResetTimestamp", "LastBattleTimestamp", "LastVisiteTimestamp", "UpdatedAt")
             VALUES (@Id, @TeamId, @Cls, @RewardMoney, @WeekResetTimestamp, @LastBattleTimestamp, @LastVisiteTimestamp, @UpdatedAt)
-            ON CONFLICT (id) DO UPDATE SET
-                team_id = EXCLUDED.team_id,
-                cls = EXCLUDED.cls,
-                reward_money = EXCLUDED.reward_money,
-                week_reset_timestamp = EXCLUDED.week_reset_timestamp,
-                last_battle_timestamp = EXCLUDED.last_battle_timestamp,
-                last_visite_timestamp = EXCLUDED.last_visite_timestamp,
-                updated_at = EXCLUDED.updated_at
+            ON CONFLICT ("Id") DO UPDATE SET
+                "TeamId" = EXCLUDED."TeamId",
+                "Cls" = EXCLUDED."Cls",
+                "RewardMoney" = EXCLUDED."RewardMoney",
+                "WeekResetTimestamp" = EXCLUDED."WeekResetTimestamp",
+                "LastBattleTimestamp" = EXCLUDED."LastBattleTimestamp",
+                "LastVisiteTimestamp" = EXCLUDED."LastVisiteTimestamp",
+                "UpdatedAt" = EXCLUDED."UpdatedAt"
             """;
 
         await connection.ExecuteAsync(sql, new
@@ -196,16 +196,16 @@ public class ArenaMessageProcessor(
         long entityId, EntityType entityType, ArenaBattleInfoDto dto)
     {
         const string sql = """
-            INSERT INTO arena_battle_stats (entity_id, entity_type, match_pattern, score, win_count, battle_count, week_battle_count, week_win_count, week_max_score, rank)
+            INSERT INTO arena_battle_stats ("EntityId", "EntityType", "MatchPattern", "Score", "WinCount", "BattleCount", "WeekBattleCount", "WeekWinCount", "WeekMaxScore", "Rank")
             VALUES (@EntityId, @EntityType, @MatchPattern, @Score, @WinCount, @BattleCount, @WeekBattleCount, @WeekWinCount, @WeekMaxScore, @Rank)
-            ON CONFLICT (entity_id, entity_type, match_pattern) DO UPDATE SET
-                score = EXCLUDED.score,
-                win_count = EXCLUDED.win_count,
-                battle_count = EXCLUDED.battle_count,
-                week_battle_count = EXCLUDED.week_battle_count,
-                week_win_count = EXCLUDED.week_win_count,
-                week_max_score = EXCLUDED.week_max_score,
-                rank = EXCLUDED.rank
+            ON CONFLICT ("EntityId", "EntityType", "MatchPattern") DO UPDATE SET
+                "Score" = EXCLUDED."Score",
+                "WinCount" = EXCLUDED."WinCount",
+                "BattleCount" = EXCLUDED."BattleCount",
+                "WeekBattleCount" = EXCLUDED."WeekBattleCount",
+                "WeekWinCount" = EXCLUDED."WeekWinCount",
+                "WeekMaxScore" = EXCLUDED."WeekMaxScore",
+                "Rank" = EXCLUDED."Rank"
             """;
 
         await connection.ExecuteAsync(sql, new
@@ -256,14 +256,14 @@ public class ArenaMessageProcessor(
         List<(long PlayerId, int Cls, int? ScoreBefore, int? ScoreAfter)> participants)
     {
         const string matchSql = """
-            INSERT INTO arena_matches (id, match_pattern, team_a_id, team_a_score_before, team_a_score_after, winner_team_id, loser_team_id, created_at)
+            INSERT INTO arena_matches ("Id", "MatchPattern", "TeamAId", "TeamAScoreBefore", "TeamAScoreAfter", "WinnerTeamId", "LoserTeamId", "CreatedAt")
             VALUES (@Id, @MatchPattern, @TeamId, @ScoreBefore, @ScoreAfter, @WinnerTeamId, @LoserTeamId, @CreatedAt)
-            ON CONFLICT (id) DO UPDATE SET
-                team_b_id = @TeamId,
-                team_b_score_before = @ScoreBefore,
-                team_b_score_after = @ScoreAfter,
-                winner_team_id = COALESCE(arena_matches.winner_team_id, @WinnerTeamId),
-                loser_team_id = COALESCE(arena_matches.loser_team_id, @LoserTeamId)
+            ON CONFLICT ("Id") DO UPDATE SET
+                "TeamBId" = @TeamId,
+                "TeamBScoreBefore" = @ScoreBefore,
+                "TeamBScoreAfter" = @ScoreAfter,
+                "WinnerTeamId" = COALESCE(arena_matches."WinnerTeamId", @WinnerTeamId),
+                "LoserTeamId" = COALESCE(arena_matches."LoserTeamId", @LoserTeamId)
             """;
 
         await connection.ExecuteAsync(matchSql, new
@@ -279,12 +279,12 @@ public class ArenaMessageProcessor(
         }, transaction);
 
         const string participantSql = """
-            INSERT INTO arena_match_participants (match_id, team_id, player_id, player_cls, score_before, score_after, is_winner)
+            INSERT INTO arena_match_participants ("MatchId", "TeamId", "PlayerId", "PlayerCls", "ScoreBefore", "ScoreAfter", "IsWinner")
             VALUES (@MatchId, @TeamId, @PlayerId, @PlayerCls, @ScoreBefore, @ScoreAfter, @IsWinner)
-            ON CONFLICT (match_id, player_id) DO UPDATE SET
-                score_before = EXCLUDED.score_before,
-                score_after = EXCLUDED.score_after,
-                is_winner = EXCLUDED.is_winner
+            ON CONFLICT ("MatchId", "PlayerId") DO UPDATE SET
+                "ScoreBefore" = EXCLUDED."ScoreBefore",
+                "ScoreAfter" = EXCLUDED."ScoreAfter",
+                "IsWinner" = EXCLUDED."IsWinner"
             """;
 
         foreach (var (playerId, cls, pScoreBefore, pScoreAfter) in participants)
@@ -309,7 +309,7 @@ public class ArenaMessageProcessor(
         long entityId, EntityType entityType, ArenaBattleInfoDto dto)
     {
         const string sql = """
-            INSERT INTO arena_score_history (entity_id, entity_type, match_pattern, score, win_count, battle_count, recorded_at)
+            INSERT INTO arena_score_history ("EntityId", "EntityType", "MatchPattern", "Score", "WinCount", "BattleCount", "RecordedAt")
             VALUES (@EntityId, @EntityType, @MatchPattern, @Score, @WinCount, @BattleCount, @RecordedAt)
             """;
 
