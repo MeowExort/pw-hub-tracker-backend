@@ -35,18 +35,36 @@ public class ArenaMessageProcessor(
                     .Select(m => ArenaDecoder.DecodeMatchId(m.Data))
                     .ToHashSet();
 
+                var previousMatchIds = await cache.GetTeamMatchIdsAsync(teamDto.Id);
+
+                if (previousMatchIds.Count == 0)
+                {
+                    var dbMatchIds = await connection.QueryAsync<long>(
+                        "SELECT \"Id\" FROM arena_matches WHERE \"TeamAId\" = @TeamId OR \"TeamBId\" = @TeamId",
+                        new { TeamId = teamDto.Id }, transaction);
+                    previousMatchIds = dbMatchIds.ToHashSet();
+                }
+
                 foreach (var battleInfo in teamDto.BattleInfo)
                 {
                     var prevTeam = await cache.GetTeamSnapshotAsync(teamDto.Id, battleInfo.MatchPattern);
+
+                    if (prevTeam is null)
+                    {
+                        var dbStats = await connection.QueryFirstOrDefaultAsync<(int Score, int BattleCount, int WinCount)?>("SELECT \"Score\", \"BattleCount\", \"WinCount\" FROM arena_battle_stats WHERE \"EntityId\" = @EntityId AND \"EntityType\" = @EntityType AND \"MatchPattern\" = @MatchPattern",
+                            new { EntityId = teamDto.Id, EntityType = (short)EntityType.Team, battleInfo.MatchPattern }, transaction);
+                        if (dbStats.HasValue)
+                            prevTeam = new BattleSnapshot(dbStats.Value.Score, dbStats.Value.BattleCount, dbStats.Value.WinCount);
+                    }
 
                     await UpsertBattleStatsAsync(connection, transaction, teamDto.Id, EntityType.Team, battleInfo);
 
                     if (prevTeam is not null && battleInfo.BattleCount > prevTeam.BattleCount)
                     {
                         var isWin = battleInfo.WinCount > prevTeam.WinCount;
-                        var newMatchId = await DetectNewMatchIdAsync(teamDto.Id, currentMatchIds);
+                        var newMatchId = DetectNewMatchId(currentMatchIds, previousMatchIds);
 
-                        var participants = await DetectParticipantsAsync(teamPlayers, battleInfo.MatchPattern, isWin);
+                        var participants = await DetectParticipantsAsync(connection, transaction, teamPlayers, battleInfo.MatchPattern, isWin);
 
                         if (newMatchId.HasValue)
                         {
@@ -71,6 +89,14 @@ public class ArenaMessageProcessor(
                     {
                         var prevPlayer = await cache.GetPlayerSnapshotAsync(playerDto.Id, battleInfo.MatchPattern);
 
+                        if (prevPlayer is null)
+                        {
+                            var dbStats = await connection.QueryFirstOrDefaultAsync<(int Score, int BattleCount, int WinCount)?>("SELECT \"Score\", \"BattleCount\", \"WinCount\" FROM arena_battle_stats WHERE \"EntityId\" = @EntityId AND \"EntityType\" = @EntityType AND \"MatchPattern\" = @MatchPattern",
+                                new { EntityId = playerDto.Id, EntityType = (short)EntityType.Player, battleInfo.MatchPattern }, transaction);
+                            if (dbStats.HasValue)
+                                prevPlayer = new BattleSnapshot(dbStats.Value.Score, dbStats.Value.BattleCount, dbStats.Value.WinCount);
+                        }
+
                         await UpsertBattleStatsAsync(connection, transaction, playerDto.Id, EntityType.Player, battleInfo);
 
                         if (prevPlayer is null || battleInfo.Score != prevPlayer.Score
@@ -84,7 +110,8 @@ public class ArenaMessageProcessor(
                     }
                 }
 
-                await cache.SetTeamMatchIdsAsync(teamDto.Id, currentMatchIds);
+                previousMatchIds.UnionWith(currentMatchIds);
+                await cache.SetTeamMatchIdsAsync(teamDto.Id, previousMatchIds);
             }
 
             await transaction.CommitAsync();
@@ -224,14 +251,14 @@ public class ArenaMessageProcessor(
         }, transaction);
     }
 
-    private async Task<long?> DetectNewMatchIdAsync(long teamId, HashSet<long> currentMatchIds)
+    private static long? DetectNewMatchId(HashSet<long> currentMatchIds, HashSet<long> previousMatchIds)
     {
-        var previousMatchIds = await cache.GetTeamMatchIdsAsync(teamId);
         var newIds = currentMatchIds.Except(previousMatchIds).ToList();
         return newIds.Count > 0 ? newIds[^1] : null;
     }
 
     private async Task<List<(long PlayerId, int Cls, int? ScoreBefore, int? ScoreAfter)>> DetectParticipantsAsync(
+        NpgsqlConnection connection, NpgsqlTransaction transaction,
         List<ArenaPlayerDto> teamPlayers, int matchPattern, bool isWin)
     {
         var participants = new List<(long, int, int?, int?)>();
@@ -242,6 +269,13 @@ public class ArenaMessageProcessor(
             if (bi is null) continue;
 
             var prev = await cache.GetPlayerSnapshotAsync(player.Id, matchPattern);
+            if (prev is null)
+            {
+                var dbStats = await connection.QueryFirstOrDefaultAsync<(int Score, int BattleCount, int WinCount)?>("SELECT \"Score\", \"BattleCount\", \"WinCount\" FROM arena_battle_stats WHERE \"EntityId\" = @EntityId AND \"EntityType\" = @EntityType AND \"MatchPattern\" = @MatchPattern",
+                    new { EntityId = player.Id, EntityType = (short)EntityType.Player, MatchPattern = matchPattern }, transaction);
+                if (dbStats.HasValue)
+                    prev = new BattleSnapshot(dbStats.Value.Score, dbStats.Value.BattleCount, dbStats.Value.WinCount);
+            }
             if (prev is not null && bi.BattleCount > prev.BattleCount)
             {
                 participants.Add((player.Id, player.Cls, prev.Score, bi.Score));
