@@ -236,16 +236,26 @@ public class ArenaMessageProcessor(
 
         foreach (var (playerId, cls, pScoreBefore, pScoreAfter) in participants)
         {
-            db.ArenaMatchParticipants.Add(new ArenaMatchParticipant
+            var existingParticipant = await db.ArenaMatchParticipants.FindAsync(matchId, playerId);
+            if (existingParticipant is null)
             {
-                MatchId = matchId,
-                TeamId = teamId,
-                PlayerId = playerId,
-                PlayerCls = cls,
-                ScoreBefore = pScoreBefore,
-                ScoreAfter = pScoreAfter,
-                IsWinner = isWin,
-            });
+                db.ArenaMatchParticipants.Add(new ArenaMatchParticipant
+                {
+                    MatchId = matchId,
+                    TeamId = teamId,
+                    PlayerId = playerId,
+                    PlayerCls = cls,
+                    ScoreBefore = pScoreBefore,
+                    ScoreAfter = pScoreAfter,
+                    IsWinner = isWin,
+                });
+            }
+            else
+            {
+                existingParticipant.ScoreBefore = pScoreBefore;
+                existingParticipant.ScoreAfter = pScoreAfter;
+                existingParticipant.IsWinner = isWin;
+            }
         }
 
         logger.LogInformation("Match {MatchId}: Team {TeamId} {Result} (score {Before} -> {After}, {Count} participants)",
