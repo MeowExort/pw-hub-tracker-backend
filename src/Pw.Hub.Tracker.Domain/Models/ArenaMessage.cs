@@ -47,6 +47,7 @@ public record ArenaNameDto
 {
     public int Size { get; init; }
     public int Length { get; init; }
+    public string Data { get; init; } = string.Empty;
 }
 
 public record ArenaTeamMemberDto

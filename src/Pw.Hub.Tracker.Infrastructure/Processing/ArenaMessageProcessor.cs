@@ -97,6 +97,13 @@ public class ArenaMessageProcessor(
         team.WeekResetTimestamp = dto.WeekResetTimestamp;
         team.LastVisiteTimestamp = dto.LastVisiteTimestamp;
         team.UpdatedAt = DateTime.UtcNow;
+
+        if (!string.IsNullOrEmpty(dto.Name.Data))
+        {
+            var decoded = ArenaDecoder.DecodeTeamName(dto.Name.Data);
+            if (!string.IsNullOrEmpty(decoded))
+                team.Name = decoded;
+        }
     }
 
     private async Task UpsertTeamMembersAsync(ArenaTeamDto dto)
