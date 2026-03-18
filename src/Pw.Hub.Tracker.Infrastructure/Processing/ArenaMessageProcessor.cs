@@ -24,11 +24,12 @@ public class ArenaMessageProcessor(
             foreach (var teamDto in data.Teams)
             {
                 await UpsertTeamAsync(connection, transaction, teamDto);
-                await UpsertTeamMembersAsync(connection, transaction, teamDto);
 
                 var teamPlayers = data.Players.Where(p => p.TeamId == teamDto.Id).ToList();
                 foreach (var playerDto in teamPlayers)
                     await UpsertPlayerAsync(connection, transaction, playerDto);
+
+                await UpsertTeamMembersAsync(connection, transaction, teamDto);
 
                 var currentMatchIds = teamDto.MatchTeamId
                     .Select(m => ArenaDecoder.DecodeMatchId(m.Data))
