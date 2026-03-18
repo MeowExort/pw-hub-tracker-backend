@@ -36,4 +36,11 @@ builder.Services.AddMassTransit(x =>
 });
 
 var host = builder.Build();
-host.Run();
+
+using (var scope = host.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<TrackerDbContext>();
+    await db.Database.MigrateAsync();
+}
+
+await host.RunAsync();
