@@ -1,0 +1,191 @@
+{
+	"info": {
+		"name": "PW Hub Tracker API",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "http://localhost:5083"
+		},
+		{
+			"key": "teamId",
+			"value": "216172782113783838"
+		},
+		{
+			"key": "playerId",
+			"value": "1"
+		},
+		{
+			"key": "matchId",
+			"value": "1"
+		}
+	],
+	"item": [
+		{
+			"name": "Teams",
+			"item": [
+				{
+					"name": "Get All Teams",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{baseUrl}}/api/arena/teams?page=1&pageSize=20",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "arena", "teams"],
+							"query": [
+								{ "key": "page", "value": "1" },
+								{ "key": "pageSize", "value": "20" },
+								{ "key": "zoneId", "value": "", "disabled": true }
+							]
+						}
+					}
+				},
+				{
+					"name": "Get Team By Id",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{baseUrl}}/api/arena/teams/{{teamId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "arena", "teams", "{{teamId}}"]
+						}
+					}
+				},
+				{
+					"name": "Get Team Members",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{baseUrl}}/api/arena/teams/{{teamId}}/members",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "arena", "teams", "{{teamId}}", "members"]
+						}
+					}
+				},
+				{
+					"name": "Get Team Matches",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{baseUrl}}/api/arena/teams/{{teamId}}/matches?page=1&pageSize=20",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "arena", "teams", "{{teamId}}", "matches"],
+							"query": [
+								{ "key": "page", "value": "1" },
+								{ "key": "pageSize", "value": "20" },
+								{ "key": "matchPattern", "value": "", "disabled": true }
+							]
+						}
+					}
+				},
+				{
+					"name": "Get Team Score History",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{baseUrl}}/api/arena/teams/{{teamId}}/score-history?limit=100",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "arena", "teams", "{{teamId}}", "score-history"],
+							"query": [
+								{ "key": "limit", "value": "100" },
+								{ "key": "matchPattern", "value": "", "disabled": true }
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Players",
+			"item": [
+				{
+					"name": "Get Player By Id",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{baseUrl}}/api/arena/players/{{playerId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "arena", "players", "{{playerId}}"]
+						}
+					}
+				},
+				{
+					"name": "Get Player Matches",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{baseUrl}}/api/arena/players/{{playerId}}/matches?page=1&pageSize=20",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "arena", "players", "{{playerId}}", "matches"],
+							"query": [
+								{ "key": "page", "value": "1" },
+								{ "key": "pageSize", "value": "20" },
+								{ "key": "matchPattern", "value": "", "disabled": true }
+							]
+						}
+					}
+				},
+				{
+					"name": "Get Player Score History",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{baseUrl}}/api/arena/players/{{playerId}}/score-history?limit=100",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "arena", "players", "{{playerId}}", "score-history"],
+							"query": [
+								{ "key": "limit", "value": "100" },
+								{ "key": "matchPattern", "value": "", "disabled": true }
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Matches",
+			"item": [
+				{
+					"name": "Get All Matches",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{baseUrl}}/api/arena/matches?page=1&pageSize=20",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "arena", "matches"],
+							"query": [
+								{ "key": "page", "value": "1" },
+								{ "key": "pageSize", "value": "20" },
+								{ "key": "matchPattern", "value": "", "disabled": true },
+								{ "key": "teamId", "value": "", "disabled": true }
+							]
+						}
+					}
+				},
+				{
+					"name": "Get Match By Id",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{baseUrl}}/api/arena/matches/{{matchId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "arena", "matches", "{{matchId}}"]
+						}
+					}
+				},
+				{
+					"name": "Rebuild Matches",
+					"request": {
+						"method": "POST",
+						"url": {
+							"raw": "{{baseUrl}}/api/arena/matches/rebuild",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "arena", "matches", "rebuild"]
+						}
+					}
+				}
+			]
+		}
+	]
+}

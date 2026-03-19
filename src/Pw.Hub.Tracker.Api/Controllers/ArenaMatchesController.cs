@@ -98,126 +98,121 @@ public class ArenaMatchesController(TrackerDbContext db, ILogger<ArenaMatchesCon
             await db.Database.ExecuteSqlRawAsync("""DELETE FROM arena_match_participants""");
             await db.Database.ExecuteSqlRawAsync("""DELETE FROM arena_matches""");
 
-            // 2. Загружаем историю score для команд, упорядоченную по времени
-            var history = await db.ArenaScoreHistory
-                .Where(h => h.EntityType == EntityType.Team)
-                .OrderBy(h => h.RecordedAt)
+            // 2. Загружаем игроков и определяем lastBattleTimestamp для каждой команды
+            var players = await db.ArenaPlayers
+                .Where(p => p.LastBattleTimestamp > 0)
                 .ToListAsync();
 
-            // 3. Группируем по (EntityId, MatchPattern) и находим моменты увеличения BattleCount
-            var matchEvents = new List<MatchEvent>();
+            // teamId -> max(LastBattleTimestamp)
+            var teamTimestamps = players
+                .GroupBy(p => p.TeamId)
+                .ToDictionary(g => g.Key, g => g.Max(p => p.LastBattleTimestamp));
 
-            var grouped = history.GroupBy(h => new { h.EntityId, h.MatchPattern });
-            foreach (var group in grouped)
-            {
-                var records = group.OrderBy(r => r.RecordedAt).ToList();
-                for (var i = 1; i < records.Count; i++)
-                {
-                    if (records[i].BattleCount > records[i - 1].BattleCount)
-                    {
-                        var isWin = records[i].WinCount > records[i - 1].WinCount;
-                        matchEvents.Add(new MatchEvent
-                        {
-                            TeamId = group.Key.EntityId,
-                            MatchPattern = group.Key.MatchPattern,
-                            ScoreBefore = records[i - 1].Score,
-                            ScoreAfter = records[i].Score,
-                            IsWin = isWin,
-                            RecordedAt = records[i].RecordedAt
-                        });
-                    }
-                }
-            }
+            // 3. Группируем команды по LastBattleTimestamp — пары с одинаковым timestamp играли друг против друга
+            var matchPairs = teamTimestamps
+                .GroupBy(kv => kv.Value)
+                .Where(g => g.Count() == 2)
+                .Select(g => g.Select(kv => kv.Key).OrderBy(id => id).ToArray())
+                .ToList();
 
-            // 4. Группируем события в пары по MatchPattern и близкому RecordedAt (в пределах 60 секунд)
-            var usedEvents = new HashSet<int>();
+            // 4. Загружаем battle_stats для команд
+            var battleStats = await db.ArenaBattleStats
+                .Where(s => s.EntityType == EntityType.Team)
+                .ToListAsync();
+
+            var statsLookup = battleStats
+                .GroupBy(s => s.EntityId)
+                .ToDictionary(g => g.Key, g => g.ToList());
+
+            // 5. Группируем игроков по команде для быстрого доступа
+            var playersByTeam = players
+                .GroupBy(p => p.TeamId)
+                .ToDictionary(g => g.Key, g => g.ToList());
+
+            // 6. Создаём матчи и участников для каждой пары и каждого matchPattern
             var matches = new List<ArenaMatch>();
+            var allParticipants = new List<ArenaMatchParticipant>();
+            var skippedPairs = 0;
 
-            var byPattern = matchEvents
-                .Select((e, idx) => (Event: e, Index: idx))
-                .GroupBy(x => x.Event.MatchPattern);
-
-            foreach (var patternGroup in byPattern)
+            foreach (var pair in matchPairs)
             {
-                var events = patternGroup.OrderBy(x => x.Event.RecordedAt).ToList();
+                var teamAId = pair[0];
+                var teamBId = pair[1];
+                var battleTimestamp = teamTimestamps[teamAId];
 
-                for (var i = 0; i < events.Count; i++)
+                // Находим общие matchPattern у обеих команд
+                var statsA = statsLookup.GetValueOrDefault(teamAId, []);
+                var statsB = statsLookup.GetValueOrDefault(teamBId, []);
+
+                var patternsA = statsA.ToDictionary(s => s.MatchPattern);
+                var patternsB = statsB.ToDictionary(s => s.MatchPattern);
+
+                var commonPatterns = patternsA.Keys.Intersect(patternsB.Keys);
+
+                foreach (var matchPattern in commonPatterns)
                 {
-                    if (usedEvents.Contains(events[i].Index)) continue;
+                    var statA = patternsA[matchPattern];
+                    var statB = patternsB[matchPattern];
 
-                    var eventA = events[i];
-                    (MatchEvent Event, int Index)? eventB = null;
+                    var matchId = GenerateMatchId(battleTimestamp, matchPattern);
 
-                    // Ищем ближайшее событие другой команды в пределах 60 секунд
-                    for (var j = i + 1; j < events.Count; j++)
-                    {
-                        if (usedEvents.Contains(events[j].Index)) continue;
-                        if (events[j].Event.TeamId == eventA.Event.TeamId) continue;
-
-                        var timeDiff = Math.Abs((events[j].Event.RecordedAt - eventA.Event.RecordedAt).TotalSeconds);
-                        if (timeDiff <= 60)
-                        {
-                            eventB = events[j];
-                            break;
-                        }
-
-                        // Если разница > 60 сек, дальше искать нет смысла (отсортировано)
-                        if ((events[j].Event.RecordedAt - eventA.Event.RecordedAt).TotalSeconds > 60)
-                            break;
-                    }
-
-                    usedEvents.Add(eventA.Index);
-
-                    var matchId = GenerateMatchId(eventA.Event.RecordedAt, eventA.Event.MatchPattern);
                     var match = new ArenaMatch
                     {
                         Id = matchId,
-                        MatchPattern = eventA.Event.MatchPattern,
-                        TeamAId = eventA.Event.TeamId,
-                        TeamAScoreBefore = eventA.Event.ScoreBefore,
-                        TeamAScoreAfter = eventA.Event.ScoreAfter,
-                        CreatedAt = eventA.Event.RecordedAt
+                        MatchPattern = matchPattern,
+                        TeamAId = teamAId,
+                        TeamBId = teamBId,
+                        TeamAScoreBefore = statA.Score,
+                        TeamAScoreAfter = statA.Score,
+                        TeamBScoreBefore = statB.Score,
+                        TeamBScoreAfter = statB.Score,
+                        CreatedAt = DateTime.UtcNow
                     };
 
-                    if (eventA.Event.IsWin)
-                    {
-                        match.WinnerTeamId = eventA.Event.TeamId;
-                    }
-                    else
-                    {
-                        match.LoserTeamId = eventA.Event.TeamId;
-                    }
-
-                    if (eventB.HasValue)
-                    {
-                        usedEvents.Add(eventB.Value.Index);
-                        match.TeamBId = eventB.Value.Event.TeamId;
-                        match.TeamBScoreBefore = eventB.Value.Event.ScoreBefore;
-                        match.TeamBScoreAfter = eventB.Value.Event.ScoreAfter;
-
-                        if (eventB.Value.Event.IsWin)
-                            match.WinnerTeamId = eventB.Value.Event.TeamId;
-                        else
-                            match.LoserTeamId = eventB.Value.Event.TeamId;
-                    }
-
                     matches.Add(match);
+
+                    // Добавляем участников — игроков обеих команд с LastBattleTimestamp матча
+                    foreach (var (teamId, isTeamA) in new[] { (teamAId, true), (teamBId, false) })
+                    {
+                        var teamPlayersList = playersByTeam.GetValueOrDefault(teamId, []);
+                        foreach (var p in teamPlayersList.Where(p => p.LastBattleTimestamp == battleTimestamp))
+                        {
+                            allParticipants.Add(new ArenaMatchParticipant
+                            {
+                                MatchId = matchId,
+                                TeamId = teamId,
+                                PlayerId = p.Id,
+                                PlayerCls = p.Cls,
+                                ScoreBefore = null,
+                                ScoreAfter = isTeamA ? statA.Score : statB.Score,
+                                IsWinner = false
+                            });
+                        }
+                    }
                 }
             }
 
-            // 5. Сохраняем матчи
+            // Команды без пары (уникальный timestamp)
+            var pairedTeamIds = matchPairs.SelectMany(p => p).ToHashSet();
+            var unpairedTeams = teamTimestamps.Keys.Except(pairedTeamIds).ToList();
+
+            // 7. Сохраняем матчи и участников
             db.ArenaMatches.AddRange(matches);
+            db.ArenaMatchParticipants.AddRange(allParticipants);
             await db.SaveChangesAsync();
 
             await transaction.CommitAsync();
 
-            logger.LogInformation("Rebuilt {Count} matches from score history", matches.Count);
+            logger.LogInformation("Rebuilt {Count} matches from player timestamps ({Pairs} pairs, {Unpaired} unpaired teams)",
+                matches.Count, matchPairs.Count, unpairedTeams.Count);
 
             return Ok(new
             {
                 matchesCreated = matches.Count,
-                matchEventsFound = matchEvents.Count,
-                unmatchedEvents = matchEvents.Count - usedEvents.Count
+                participantsCreated = allParticipants.Count,
+                teamPairsFound = matchPairs.Count,
+                unpairedTeams = unpairedTeams.Count,
+                totalTeamsWithBattles = teamTimestamps.Count
             });
         }
         catch (Exception ex)
@@ -228,25 +223,14 @@ public class ArenaMatchesController(TrackerDbContext db, ILogger<ArenaMatchesCon
         }
     }
 
-    private static long GenerateMatchId(DateTime recordedAt, int matchPattern)
+    private static long GenerateMatchId(long battleTimestamp, int matchPattern)
     {
-        var timestamp = new DateTimeOffset(recordedAt, TimeSpan.Zero).ToUnixTimeMilliseconds();
         unchecked
         {
             var hash = 17L;
-            hash = hash * 31 + timestamp;
+            hash = hash * 31 + battleTimestamp;
             hash = hash * 31 + matchPattern;
             return hash;
         }
-    }
-
-    private record MatchEvent
-    {
-        public long TeamId { get; init; }
-        public int MatchPattern { get; init; }
-        public int ScoreBefore { get; init; }
-        public int ScoreAfter { get; init; }
-        public bool IsWin { get; init; }
-        public DateTime RecordedAt { get; init; }
     }
 }
