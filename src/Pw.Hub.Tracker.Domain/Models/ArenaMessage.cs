@@ -20,9 +20,12 @@ public record ArenaEventData
 
 public record ArenaTeamDto
 {
-    public long Id { get; init; }
+    private readonly long _id;
+    public long Id { get => _id & 0xFFFFFFFF; init => _id = value; }
+
+    private readonly long _captainId;
     [JsonPropertyName("captain_id")]
-    public long CaptainId { get; init; }
+    public long CaptainId { get => _captainId & 0xFFFFFFFF; init => _captainId = value; }
     [JsonPropertyName("zone_id")]
     public int ZoneId { get; init; }
     public int Reserve0 { get; init; }
@@ -52,8 +55,9 @@ public record ArenaNameDto
 
 public record ArenaTeamMemberDto
 {
+    private readonly long _arenaPlayerId;
     [JsonPropertyName("arena_player_id")]
-    public long ArenaPlayerId { get; init; }
+    public long ArenaPlayerId { get => _arenaPlayerId & 0xFFFFFFFF; init => _arenaPlayerId = value; }
     [JsonPropertyName("reward_money_info")]
     public long RewardMoneyInfo { get; init; }
 }
@@ -84,9 +88,12 @@ public record ArenaBattleInfoDto
 
 public record ArenaPlayerDto
 {
-    public long Id { get; init; }
+    private readonly long _id;
+    public long Id { get => _id & 0xFFFFFFFF; init => _id = value; }
+
+    private readonly long _teamId;
     [JsonPropertyName("team_id")]
-    public long TeamId { get; init; }
+    public long TeamId { get => _teamId & 0xFFFFFFFF; init => _teamId = value; }
     public int Cls { get; init; }
     [JsonPropertyName("reward_money")]
     public long RewardMoney { get; init; }
