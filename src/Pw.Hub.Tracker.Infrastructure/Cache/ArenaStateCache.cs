@@ -15,8 +15,8 @@ public class ArenaStateCache(IConnectionMultiplexer redis)
     private static string PlayerKey(long playerId, int matchPattern) =>
         $"arena:player:{playerId}:mp:{matchPattern}";
 
-    private static string TeamMatchIdsKey(long teamId) =>
-        $"arena:team:{teamId}:match_ids";
+    private static string TeamLastBattleKey(long teamId) =>
+        $"arena:team:{teamId}:last_battle_ts";
 
     public async Task<BattleSnapshot?> GetTeamSnapshotAsync(long teamId, int matchPattern)
     {
@@ -42,16 +42,15 @@ public class ArenaStateCache(IConnectionMultiplexer redis)
             JsonSerializer.Serialize(snapshot), TimeSpan.FromDays(30));
     }
 
-    public async Task<HashSet<long>> GetTeamMatchIdsAsync(long teamId)
+    public async Task<long?> GetTeamLastBattleTimestampAsync(long teamId)
     {
-        var val = await _db.StringGetAsync(TeamMatchIdsKey(teamId));
-        if (val.IsNullOrEmpty) return [];
-        return JsonSerializer.Deserialize<HashSet<long>>((string)val!) ?? [];
+        var val = await _db.StringGetAsync(TeamLastBattleKey(teamId));
+        return val.IsNullOrEmpty ? null : (long?)long.Parse((string)val!);
     }
 
-    public async Task SetTeamMatchIdsAsync(long teamId, HashSet<long> matchIds)
+    public async Task SetTeamLastBattleTimestampAsync(long teamId, long timestamp)
     {
-        await _db.StringSetAsync(TeamMatchIdsKey(teamId),
-            JsonSerializer.Serialize(matchIds), TimeSpan.FromDays(30));
+        await _db.StringSetAsync(TeamLastBattleKey(teamId),
+            timestamp.ToString(), TimeSpan.FromDays(30));
     }
 }

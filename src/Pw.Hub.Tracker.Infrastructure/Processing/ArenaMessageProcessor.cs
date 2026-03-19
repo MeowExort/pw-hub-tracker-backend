@@ -31,19 +31,12 @@ public class ArenaMessageProcessor(
 
                 await UpsertTeamMembersAsync(connection, transaction, teamDto);
 
-                var currentMatchIds = teamDto.MatchTeamId
-                    .Select(m => ArenaDecoder.DecodeMatchId(m.Data))
-                    .ToHashSet();
-
-                var previousMatchIds = await cache.GetTeamMatchIdsAsync(teamDto.Id);
-
-                if (previousMatchIds.Count == 0)
-                {
-                    var dbMatchIds = await connection.QueryAsync<long>(
-                        "SELECT \"Id\" FROM arena_matches WHERE \"TeamAId\" = @TeamId OR \"TeamBId\" = @TeamId",
-                        new { TeamId = teamDto.Id }, transaction);
-                    previousMatchIds = dbMatchIds.ToHashSet();
-                }
+                // Шаг 1: Определяем lastBattleTimestamp — МАКСИМАЛЬНЫЙ среди всех игроков команды
+                var battleTimestamp = teamPlayers
+                    .Where(p => p.LastBattleTimestamp > 0)
+                    .Select(p => p.LastBattleTimestamp)
+                    .DefaultIfEmpty(0)
+                    .Max();
 
                 foreach (var battleInfo in teamDto.BattleInfo)
                 {
@@ -62,13 +55,12 @@ public class ArenaMessageProcessor(
                     if (prevTeam is not null && battleInfo.BattleCount > prevTeam.BattleCount)
                     {
                         var isWin = battleInfo.WinCount > prevTeam.WinCount;
-                        var newMatchId = DetectNewMatchId(currentMatchIds, previousMatchIds);
-
                         var participants = await DetectParticipantsAsync(connection, transaction, teamPlayers, battleInfo.MatchPattern, isWin);
 
-                        if (newMatchId.HasValue)
+                        if (battleTimestamp > 0)
                         {
-                            await SaveMatchAsync(connection, transaction, newMatchId.Value, teamDto.Id,
+                            var matchId = GenerateMatchId(battleTimestamp, battleInfo.MatchPattern);
+                            await SaveMatchAsync(connection, transaction, matchId, teamDto.Id,
                                 battleInfo.MatchPattern, isWin, prevTeam.Score, battleInfo.Score, participants);
                         }
 
@@ -110,8 +102,9 @@ public class ArenaMessageProcessor(
                     }
                 }
 
-                previousMatchIds.UnionWith(currentMatchIds);
-                await cache.SetTeamMatchIdsAsync(teamDto.Id, previousMatchIds);
+                // Обновить кэш timestamp
+                if (battleTimestamp > 0)
+                    await cache.SetTeamLastBattleTimestampAsync(teamDto.Id, battleTimestamp);
             }
 
             await transaction.CommitAsync();
@@ -251,10 +244,15 @@ public class ArenaMessageProcessor(
         }, transaction);
     }
 
-    private static long? DetectNewMatchId(HashSet<long> currentMatchIds, HashSet<long> previousMatchIds)
+    private static long GenerateMatchId(long battleTimestamp, int matchPattern)
     {
-        var newIds = currentMatchIds.Except(previousMatchIds).ToList();
-        return newIds.Count > 0 ? newIds[^1] : null;
+        unchecked
+        {
+            var hash = 17L;
+            hash = hash * 31 + battleTimestamp;
+            hash = hash * 31 + matchPattern;
+            return hash;
+        }
     }
 
     private async Task<List<(long PlayerId, int Cls, int? ScoreBefore, int? ScoreAfter)>> DetectParticipantsAsync(
@@ -290,29 +288,67 @@ public class ArenaMessageProcessor(
         bool isWin, int scoreBefore, int scoreAfter,
         List<(long PlayerId, int Cls, int? ScoreBefore, int? ScoreAfter)> participants)
     {
-        const string matchSql = """
-            INSERT INTO arena_matches ("Id", "MatchPattern", "TeamAId", "TeamAScoreBefore", "TeamAScoreAfter", "WinnerTeamId", "LoserTeamId", "CreatedAt")
-            VALUES (@Id, @MatchPattern, @TeamId, @ScoreBefore, @ScoreAfter, @WinnerTeamId, @LoserTeamId, @CreatedAt)
-            ON CONFLICT ("Id") DO UPDATE SET
-                "TeamBId" = @TeamId,
-                "TeamBScoreBefore" = @ScoreBefore,
-                "TeamBScoreAfter" = @ScoreAfter,
-                "WinnerTeamId" = COALESCE(arena_matches."WinnerTeamId", @WinnerTeamId),
-                "LoserTeamId" = COALESCE(arena_matches."LoserTeamId", @LoserTeamId)
-            """;
+        // Проверяем существующий матч
+        var existing = await connection.QueryFirstOrDefaultAsync<(long? TeamAId, long? TeamBId)>("""
+            SELECT "TeamAId", "TeamBId" FROM arena_matches WHERE "Id" = @Id
+            """, new { Id = matchId }, transaction);
 
-        await connection.ExecuteAsync(matchSql, new
+        if (existing.TeamAId.HasValue && existing.TeamBId.HasValue)
         {
-            Id = matchId,
-            MatchPattern = matchPattern,
-            TeamId = teamId,
-            ScoreBefore = scoreBefore,
-            ScoreAfter = scoreAfter,
-            WinnerTeamId = isWin ? teamId : (long?)null,
-            LoserTeamId = isWin ? (long?)null : teamId,
-            CreatedAt = DateTime.UtcNow
-        }, transaction);
+            // Обе команды уже записаны
+            if (existing.TeamAId != teamId && existing.TeamBId != teamId)
+            {
+                logger.LogCritical(
+                    "Match {MatchId}: Third team {TeamId} detected! Existing teams: {TeamA}, {TeamB}. Skipping.",
+                    matchId, teamId, existing.TeamAId, existing.TeamBId);
+                return;
+            }
+            // Повторное сообщение от уже записанной команды — пропускаем
+            return;
+        }
 
+        if (!existing.TeamAId.HasValue)
+        {
+            // Первая команда — INSERT
+            const string insertSql = """
+                INSERT INTO arena_matches ("Id", "MatchPattern", "TeamAId", "TeamAScoreBefore", "TeamAScoreAfter",
+                    "WinnerTeamId", "LoserTeamId", "CreatedAt")
+                VALUES (@Id, @MatchPattern, @TeamId, @ScoreBefore, @ScoreAfter,
+                    @WinnerTeamId, @LoserTeamId, @CreatedAt)
+                ON CONFLICT ("Id") DO NOTHING
+                """;
+
+            var inserted = await connection.ExecuteAsync(insertSql, new
+            {
+                Id = matchId,
+                MatchPattern = matchPattern,
+                TeamId = teamId,
+                ScoreBefore = scoreBefore,
+                ScoreAfter = scoreAfter,
+                WinnerTeamId = isWin ? teamId : (long?)null,
+                LoserTeamId = isWin ? (long?)null : teamId,
+                CreatedAt = DateTime.UtcNow
+            }, transaction);
+
+            if (inserted == 0)
+            {
+                // Кто-то уже вставил — значит мы вторая команда, обновляем как TeamB
+                await UpdateAsTeamB(connection, transaction, matchId, teamId, scoreBefore, scoreAfter, isWin);
+            }
+        }
+        else
+        {
+            if (existing.TeamAId == teamId)
+            {
+                // Повторное сообщение от TeamA — пропускаем
+                return;
+            }
+
+            // Вторая команда — UPDATE
+            await UpdateAsTeamB(connection, transaction, matchId, teamId, scoreBefore, scoreAfter, isWin);
+        }
+
+        // Сохраняем участников
         const string participantSql = """
             INSERT INTO arena_match_participants ("MatchId", "TeamId", "PlayerId", "PlayerCls", "ScoreBefore", "ScoreAfter", "IsWinner")
             VALUES (@MatchId, @TeamId, @PlayerId, @PlayerCls, @ScoreBefore, @ScoreAfter, @IsWinner)
@@ -338,6 +374,30 @@ public class ArenaMessageProcessor(
 
         logger.LogInformation("Match {MatchId}: Team {TeamId} {Result} (score {Before} -> {After}, {Count} participants)",
             matchId, teamId, isWin ? "WIN" : "LOSS", scoreBefore, scoreAfter, participants.Count);
+    }
+
+    private static async Task UpdateAsTeamB(NpgsqlConnection connection, NpgsqlTransaction transaction,
+        long matchId, long teamId, int scoreBefore, int scoreAfter, bool isWin)
+    {
+        const string updateSql = """
+            UPDATE arena_matches SET
+                "TeamBId" = @TeamId,
+                "TeamBScoreBefore" = @ScoreBefore,
+                "TeamBScoreAfter" = @ScoreAfter,
+                "WinnerTeamId" = COALESCE("WinnerTeamId", @WinnerTeamId),
+                "LoserTeamId" = COALESCE("LoserTeamId", @LoserTeamId)
+            WHERE "Id" = @Id AND "TeamBId" IS NULL
+            """;
+
+        await connection.ExecuteAsync(updateSql, new
+        {
+            Id = matchId,
+            TeamId = teamId,
+            ScoreBefore = scoreBefore,
+            ScoreAfter = scoreAfter,
+            WinnerTeamId = isWin ? teamId : (long?)null,
+            LoserTeamId = isWin ? (long?)null : teamId
+        }, transaction);
     }
 
     private static async Task RecordScoreHistoryAsync(NpgsqlConnection connection, NpgsqlTransaction transaction,

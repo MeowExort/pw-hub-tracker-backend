@@ -9,10 +9,4 @@ public static class ArenaDecoder
         var raw = Convert.FromBase64String(base64Name);
         return Encoding.Unicode.GetString(raw);
     }
-
-    public static long DecodeMatchId(string base64Data)
-    {
-        var raw = Convert.FromBase64String(base64Data);
-        return BitConverter.ToInt64(raw, 0);
-    }
 }
