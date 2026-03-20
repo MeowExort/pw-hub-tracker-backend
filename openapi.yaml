@@ -1,0 +1,614 @@
+openapi: 3.0.3
+info:
+  title: PW Hub Tracker API
+  version: 1.0.0
+  description: API для трекера арены PW Hub
+
+servers:
+  - url: http://localhost:5083
+
+paths:
+  /api/arena/teams:
+    get:
+      tags: [Teams]
+      summary: Get All Teams
+      operationId: getTeams
+      parameters:
+        - name: zoneId
+          in: query
+          schema:
+            type: integer
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+            default: 20
+            minimum: 1
+            maximum: 100
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total:
+                    type: integer
+                  page:
+                    type: integer
+                  pageSize:
+                    type: integer
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/TeamListItem'
+
+  /api/arena/teams/{teamId}:
+    get:
+      tags: [Teams]
+      summary: Get Team By Id
+      operationId: getTeamById
+      parameters:
+        - $ref: '#/components/parameters/teamId'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeamDetail'
+        '404':
+          description: Team not found
+
+  /api/arena/teams/{teamId}/members:
+    get:
+      tags: [Teams]
+      summary: Get Team Members
+      operationId: getTeamMembers
+      parameters:
+        - $ref: '#/components/parameters/teamId'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TeamMember'
+
+  /api/arena/teams/{teamId}/matches:
+    get:
+      tags: [Teams]
+      summary: Get Team Matches
+      operationId: getTeamMatches
+      parameters:
+        - $ref: '#/components/parameters/teamId'
+        - name: matchPattern
+          in: query
+          schema:
+            type: integer
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+            default: 20
+            minimum: 1
+            maximum: 100
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total:
+                    type: integer
+                  page:
+                    type: integer
+                  pageSize:
+                    type: integer
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/MatchListItem'
+
+  /api/arena/teams/{teamId}/score-history:
+    get:
+      tags: [Teams]
+      summary: Get Team Score History
+      operationId: getTeamScoreHistory
+      parameters:
+        - $ref: '#/components/parameters/teamId'
+        - name: matchPattern
+          in: query
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+            minimum: 1
+            maximum: 1000
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ScoreHistoryItem'
+
+  /api/arena/players/{playerId}:
+    get:
+      tags: [Players]
+      summary: Get Player By Id
+      operationId: getPlayerById
+      parameters:
+        - $ref: '#/components/parameters/playerId'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlayerDetail'
+        '404':
+          description: Player not found
+
+  /api/arena/players/{playerId}/matches:
+    get:
+      tags: [Players]
+      summary: Get Player Matches
+      operationId: getPlayerMatches
+      parameters:
+        - $ref: '#/components/parameters/playerId'
+        - name: matchPattern
+          in: query
+          schema:
+            type: integer
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+            default: 20
+            minimum: 1
+            maximum: 100
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total:
+                    type: integer
+                  page:
+                    type: integer
+                  pageSize:
+                    type: integer
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PlayerMatchItem'
+
+  /api/arena/players/{playerId}/score-history:
+    get:
+      tags: [Players]
+      summary: Get Player Score History
+      operationId: getPlayerScoreHistory
+      parameters:
+        - $ref: '#/components/parameters/playerId'
+        - name: matchPattern
+          in: query
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+            minimum: 1
+            maximum: 1000
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ScoreHistoryItem'
+
+  /api/arena/matches:
+    get:
+      tags: [Matches]
+      summary: Get All Matches
+      operationId: getMatches
+      parameters:
+        - name: matchPattern
+          in: query
+          schema:
+            type: integer
+        - name: teamId
+          in: query
+          schema:
+            type: integer
+            format: int64
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+            default: 20
+            minimum: 1
+            maximum: 100
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total:
+                    type: integer
+                  page:
+                    type: integer
+                  pageSize:
+                    type: integer
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/MatchListItem'
+
+  /api/arena/matches/{matchId}:
+    get:
+      tags: [Matches]
+      summary: Get Match By Id
+      operationId: getMatchById
+      parameters:
+        - name: matchId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MatchDetail'
+        '404':
+          description: Match not found
+
+  /api/arena/matches/rebuild:
+    post:
+      tags: [Matches]
+      summary: Rebuild Matches
+      operationId: rebuildMatches
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RebuildResult'
+
+components:
+  parameters:
+    teamId:
+      name: teamId
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+    playerId:
+      name: playerId
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+
+  schemas:
+    TeamListItem:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        captainId:
+          type: integer
+          format: int64
+        zoneId:
+          type: integer
+        name:
+          type: string
+        weekResetTimestamp:
+          type: integer
+          format: int64
+        lastVisiteTimestamp:
+          type: integer
+          format: int64
+        updatedAt:
+          type: string
+          format: date-time
+        memberCount:
+          type: integer
+
+    BattleStat:
+      type: object
+      properties:
+        matchPattern:
+          type: integer
+        score:
+          type: integer
+        winCount:
+          type: integer
+        battleCount:
+          type: integer
+        weekBattleCount:
+          type: integer
+        weekWinCount:
+          type: integer
+        weekMaxScore:
+          type: integer
+        rank:
+          type: integer
+
+    TeamDetail:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        captainId:
+          type: integer
+          format: int64
+        zoneId:
+          type: integer
+        name:
+          type: string
+        weekResetTimestamp:
+          type: integer
+          format: int64
+        lastVisiteTimestamp:
+          type: integer
+          format: int64
+        updatedAt:
+          type: string
+          format: date-time
+        members:
+          type: array
+          items:
+            type: object
+            properties:
+              playerId:
+                type: integer
+                format: int64
+              rewardMoneyInfo:
+                type: integer
+        battleStats:
+          type: array
+          items:
+            $ref: '#/components/schemas/BattleStat'
+
+    TeamMember:
+      type: object
+      properties:
+        playerId:
+          type: integer
+          format: int64
+        rewardMoneyInfo:
+          type: integer
+        player:
+          type: object
+          properties:
+            id:
+              type: integer
+              format: int64
+            cls:
+              type: integer
+            lastBattleTimestamp:
+              type: integer
+              format: int64
+            lastVisiteTimestamp:
+              type: integer
+              format: int64
+            battleStats:
+              type: array
+              items:
+                $ref: '#/components/schemas/BattleStat'
+
+    MatchListItem:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        matchPattern:
+          type: integer
+        teamAId:
+          type: integer
+          format: int64
+        teamBId:
+          type: integer
+          format: int64
+        winnerTeamId:
+          type: integer
+          format: int64
+          nullable: true
+        loserTeamId:
+          type: integer
+          format: int64
+          nullable: true
+        teamAScoreBefore:
+          type: integer
+          nullable: true
+        teamAScoreAfter:
+          type: integer
+          nullable: true
+        teamBScoreBefore:
+          type: integer
+          nullable: true
+        teamBScoreAfter:
+          type: integer
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+
+    MatchDetail:
+      allOf:
+        - $ref: '#/components/schemas/MatchListItem'
+        - type: object
+          properties:
+            participants:
+              type: array
+              items:
+                $ref: '#/components/schemas/MatchParticipant'
+
+    MatchParticipant:
+      type: object
+      properties:
+        playerId:
+          type: integer
+          format: int64
+        teamId:
+          type: integer
+          format: int64
+        playerCls:
+          type: integer
+        scoreBefore:
+          type: integer
+          nullable: true
+        scoreAfter:
+          type: integer
+          nullable: true
+        isWinner:
+          type: boolean
+
+    PlayerDetail:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        teamId:
+          type: integer
+          format: int64
+        cls:
+          type: integer
+        rewardMoney:
+          type: integer
+        weekResetTimestamp:
+          type: integer
+          format: int64
+        lastBattleTimestamp:
+          type: integer
+          format: int64
+        lastVisiteTimestamp:
+          type: integer
+          format: int64
+        updatedAt:
+          type: string
+          format: date-time
+        battleStats:
+          type: array
+          items:
+            $ref: '#/components/schemas/BattleStat'
+
+    PlayerMatchItem:
+      type: object
+      properties:
+        matchId:
+          type: integer
+          format: int64
+        teamId:
+          type: integer
+          format: int64
+        playerCls:
+          type: integer
+        scoreBefore:
+          type: integer
+          nullable: true
+        scoreAfter:
+          type: integer
+          nullable: true
+        isWinner:
+          type: boolean
+        match:
+          type: object
+          properties:
+            matchPattern:
+              type: integer
+            teamAId:
+              type: integer
+              format: int64
+            teamBId:
+              type: integer
+              format: int64
+            winnerTeamId:
+              type: integer
+              format: int64
+              nullable: true
+            createdAt:
+              type: string
+              format: date-time
+
+    ScoreHistoryItem:
+      type: object
+      properties:
+        matchPattern:
+          type: integer
+        score:
+          type: integer
+        winCount:
+          type: integer
+        battleCount:
+          type: integer
+        recordedAt:
+          type: string
+          format: date-time
+
+    RebuildResult:
+      type: object
+      properties:
+        matchesCreated:
+          type: integer
+        participantsCreated:
+          type: integer
+        teamPairsFound:
+          type: integer
+        unpairedTeams:
+          type: integer
+        totalTeamsWithBattles:
+          type: integer
