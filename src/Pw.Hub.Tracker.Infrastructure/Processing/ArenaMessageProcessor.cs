@@ -64,11 +64,11 @@ public class ArenaMessageProcessor(
                                 battleInfo.MatchPattern, isWin, prevTeam.Score, battleInfo.Score, participants);
                         }
 
-                        await RecordScoreHistoryAsync(connection, transaction, teamDto.Id, EntityType.Team, battleInfo);
+                        await RecordScoreHistoryAsync(connection, transaction, teamDto.Id, EntityType.Team, battleInfo, teamDto.Members.Count);
                     }
                     else if (prevTeam is null || battleInfo.Score != prevTeam.Score)
                     {
-                        await RecordScoreHistoryAsync(connection, transaction, teamDto.Id, EntityType.Team, battleInfo);
+                        await RecordScoreHistoryAsync(connection, transaction, teamDto.Id, EntityType.Team, battleInfo, teamDto.Members.Count);
                     }
 
                     await cache.SetTeamSnapshotAsync(teamDto.Id, battleInfo.MatchPattern,
@@ -401,11 +401,11 @@ public class ArenaMessageProcessor(
     }
 
     private static async Task RecordScoreHistoryAsync(NpgsqlConnection connection, NpgsqlTransaction transaction,
-        long entityId, EntityType entityType, ArenaBattleInfoDto dto)
+        long entityId, EntityType entityType, ArenaBattleInfoDto dto, int? memberCount = null)
     {
         const string sql = """
-            INSERT INTO arena_score_history ("EntityId", "EntityType", "MatchPattern", "Score", "WinCount", "BattleCount", "RecordedAt")
-            VALUES (@EntityId, @EntityType, @MatchPattern, @Score, @WinCount, @BattleCount, @RecordedAt)
+            INSERT INTO arena_score_history ("EntityId", "EntityType", "MatchPattern", "Score", "WinCount", "BattleCount", "MemberCount", "RecordedAt")
+            VALUES (@EntityId, @EntityType, @MatchPattern, @Score, @WinCount, @BattleCount, @MemberCount, @RecordedAt)
             """;
 
         await connection.ExecuteAsync(sql, new
@@ -416,6 +416,7 @@ public class ArenaMessageProcessor(
             dto.Score,
             dto.WinCount,
             dto.BattleCount,
+            MemberCount = memberCount,
             RecordedAt = DateTime.UtcNow
         }, transaction);
     }

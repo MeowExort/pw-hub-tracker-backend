@@ -9,15 +9,53 @@ namespace Pw.Hub.Tracker.Api.Controllers;
 [Route("api/arena/teams")]
 public class ArenaTeamsController(TrackerDbContext db) : ControllerBase
 {
-    [HttpGet]
-    public async Task<IActionResult> GetAll(
+    private static readonly Dictionary<char, char> LayoutMap = BuildLayoutMap();
+
+    private static Dictionary<char, char> BuildLayoutMap()
+    {
+        const string en = "qwertyuiop[]asdfghjkl;'zxcvbnm,.`QWERTYUIOP{}ASDFGHJKL:\"ZXCVBNM<>~";
+        const string ru = "йцукенгшщзхъфывапролджэячсмитьбюёЙЦУКЕНГШЩЗХЪФЫВАПРОЛДЖЭЯЧСМИТЬБЮЁ";
+        var map = new Dictionary<char, char>();
+        for (var i = 0; i < en.Length && i < ru.Length; i++)
+        {
+            map[en[i]] = ru[i];
+            map[ru[i]] = en[i];
+        }
+        return map;
+    }
+
+    private static string NormalizeLayout(string input)
+    {
+        var chars = input.ToCharArray();
+        for (var i = 0; i < chars.Length; i++)
+        {
+            if (LayoutMap.TryGetValue(chars[i], out var mapped))
+                chars[i] = mapped;
+        }
+        return new string(chars);
+    }
+
+    [HttpGet("search")]
+    public async Task<IActionResult> Search(
+        [FromQuery] string name,
         [FromQuery] int? zoneId,
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20)
     {
-        pageSize = Math.Clamp(pageSize, 1, 100);
+        if (string.IsNullOrWhiteSpace(name))
+            return BadRequest("Parameter 'name' is required.");
 
-        var query = db.ArenaTeams.AsQueryable();
+        pageSize = Math.Clamp(pageSize, 1, 100);
+        var trimmed = name.Trim();
+        var alternate = NormalizeLayout(trimmed);
+
+        var query = db.ArenaTeams
+            .Where(t => t.Name != null)
+            .Where(t =>
+                EF.Functions.ILike(t.Name!, $"%{trimmed}%") ||
+                EF.Functions.ILike(t.Name!, $"%{alternate}%") ||
+                EF.Functions.TrigramsSimilarity(t.Name!, trimmed) > 0.3 ||
+                EF.Functions.TrigramsSimilarity(t.Name!, alternate) > 0.3);
 
         if (zoneId.HasValue)
             query = query.Where(t => t.ZoneId == zoneId.Value);
@@ -25,7 +63,11 @@ public class ArenaTeamsController(TrackerDbContext db) : ControllerBase
         var total = await query.CountAsync();
 
         var teams = await query
-            .OrderByDescending(t => t.UpdatedAt)
+            .OrderByDescending(t =>
+                EF.Functions.TrigramsSimilarity(t.Name!, trimmed) >
+                EF.Functions.TrigramsSimilarity(t.Name!, alternate)
+                    ? EF.Functions.TrigramsSimilarity(t.Name!, trimmed)
+                    : EF.Functions.TrigramsSimilarity(t.Name!, alternate))
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
             .Select(t => new
@@ -40,6 +82,78 @@ public class ArenaTeamsController(TrackerDbContext db) : ControllerBase
                 MemberCount = t.Members.Count
             })
             .ToListAsync();
+
+        return Ok(new { total, page, pageSize, items = teams });
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> GetAll(
+        [FromQuery] int? zoneId,
+        [FromQuery] string? sortBy,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20)
+    {
+        pageSize = Math.Clamp(pageSize, 1, 100);
+
+        var query = db.ArenaTeams.AsQueryable();
+
+        if (zoneId.HasValue)
+            query = query.Where(t => t.ZoneId == zoneId.Value);
+
+        var total = await query.CountAsync();
+
+        int? sortMatchPattern = sortBy?.ToLowerInvariant() switch
+        {
+            "ratingorder" => 1,
+            "ratingchaos" => 0,
+            _ => null
+        };
+
+        IQueryable<object> projected;
+
+        if (sortMatchPattern.HasValue)
+        {
+            var mp = sortMatchPattern.Value;
+            projected = query
+                .Select(t => new
+                {
+                    t.Id,
+                    t.CaptainId,
+                    t.ZoneId,
+                    t.Name,
+                    t.WeekResetTimestamp,
+                    t.LastVisiteTimestamp,
+                    t.UpdatedAt,
+                    MemberCount = t.Members.Count,
+                    RealRating = t.BattleStats
+                        .Where(s => s.EntityType == EntityType.Team && s.MatchPattern == mp)
+                        .Select(s => t.Members.Count > 0 ? (double)s.Score / t.Members.Count : 0)
+                        .FirstOrDefault()
+                })
+                .OrderByDescending(t => t.RealRating)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize);
+        }
+        else
+        {
+            projected = query
+                .OrderByDescending(t => t.UpdatedAt)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .Select(t => new
+                {
+                    t.Id,
+                    t.CaptainId,
+                    t.ZoneId,
+                    t.Name,
+                    t.WeekResetTimestamp,
+                    t.LastVisiteTimestamp,
+                    t.UpdatedAt,
+                    MemberCount = t.Members.Count
+                });
+        }
+
+        var teams = await projected.ToListAsync();
 
         return Ok(new { total, page, pageSize, items = teams });
     }
@@ -183,10 +297,77 @@ public class ArenaTeamsController(TrackerDbContext db) : ControllerBase
                 h.Score,
                 h.WinCount,
                 h.BattleCount,
+                h.MemberCount,
                 h.RecordedAt
             })
             .ToListAsync();
 
         return Ok(history);
+    }
+
+    [HttpPost("score-history/fix-member-counts")]
+    public async Task<IActionResult> FixMemberCounts()
+    {
+        // Текущее количество членов команды — используем как fallback для последней записи
+        var teamMemberCounts = await db.ArenaTeamMembers
+            .GroupBy(m => m.TeamId)
+            .Select(g => new { TeamId = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.TeamId, x => x.Count);
+
+        // Загружаем ВСЮ историю команд, упорядоченную от новых к старым (идём от конца к началу)
+        var allHistory = await db.ArenaScoreHistory
+            .Where(h => h.EntityType == EntityType.Team)
+            .OrderBy(h => h.EntityId)
+            .ThenBy(h => h.MatchPattern)
+            .ThenByDescending(h => h.RecordedAt)
+            .ToListAsync();
+
+        var fixedCount = 0;
+        var details = new List<object>();
+
+        ArenaScoreHistory? prevTeamHistory = null;
+        for (var i = 0; i < allHistory.Count; i++)
+        {
+            var current = allHistory[i];
+            var isSameGroup = prevTeamHistory is not null
+                              && prevTeamHistory.EntityId == current.EntityId
+                              && prevTeamHistory.MatchPattern == current.MatchPattern;
+
+            if (current.MemberCount == null)
+            {
+                if (!isSameGroup)
+                {
+                    // Самая актуальная запись группы — ставим текущее количество игроков
+                    if (teamMemberCounts.TryGetValue(current.EntityId, out var count))
+                        current.MemberCount = count;
+                }
+                else
+                {
+                    // prevTeamHistory — более новая запись (уже обработана)
+                    // current — более старая запись
+                    // diff = prevTeamHistory.Score - current.Score
+                    var scoreDiff = Math.Abs(prevTeamHistory!.Score - current.Score);
+                    if (scoreDiff < 1000)
+                    {
+                        current.MemberCount = prevTeamHistory.MemberCount;
+                    }
+                    else
+                    {
+                        var memberDiff = scoreDiff / 1000;
+                        current.MemberCount = prevTeamHistory.MemberCount - memberDiff;
+                    }
+                }
+
+                if (current.MemberCount.HasValue)
+                    fixedCount++;
+            }
+
+            prevTeamHistory = current;
+        }
+
+        if (fixedCount > 0)
+            await db.SaveChangesAsync();
+
+        return Ok(new { totalRecords = allHistory.Count, fixedCount, details });
     }
 }

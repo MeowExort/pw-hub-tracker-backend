@@ -9,5 +9,7 @@ public class ArenaScoreHistory
     public int Score { get; set; }
     public int WinCount { get; set; }
     public int BattleCount { get; set; }
+    public int? MemberCount { get; set; }
+    public double? NormalizedScore => MemberCount is > 0 ? (double)Score / MemberCount.Value : null;
     public DateTime RecordedAt { get; set; } = DateTime.UtcNow;
 }

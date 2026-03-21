@@ -15,6 +15,7 @@ public class TrackerDbContext(DbContextOptions<TrackerDbContext> options) : DbCo
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.HasPostgresExtension("pg_trgm");
         modelBuilder.Entity<ArenaTeam>(e =>
         {
             e.ToTable("arena_teams");
@@ -49,6 +50,7 @@ public class TrackerDbContext(DbContextOptions<TrackerDbContext> options) : DbCo
             e.ToTable("arena_score_history");
             e.HasKey(x => x.Id);
             e.Property(x => x.Id).UseIdentityAlwaysColumn();
+            e.Ignore(x => x.NormalizedScore);
             e.HasIndex(x => new { x.EntityId, x.EntityType, x.MatchPattern, x.RecordedAt });
         });
 
