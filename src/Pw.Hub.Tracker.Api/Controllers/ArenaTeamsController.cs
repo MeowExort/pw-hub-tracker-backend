@@ -342,6 +342,124 @@ public class ArenaTeamsController(TrackerDbContext db) : ControllerBase
         return Ok(history);
     }
 
+    [HttpPost("matches/fix-score-changes")]
+    public async Task<IActionResult> FixMatchScoreChanges()
+    {
+        // Загружаем все матчи, у которых есть обе команды
+        var matches = await db.ArenaMatches
+            .AsTracking()
+            .Where(m => m.TeamAId != null && m.TeamBId != null)
+            .OrderBy(m => m.CreatedAt)
+            .ToListAsync();
+
+        // Загружаем всю историю рейтинга команд, сгруппированную по (EntityId, MatchPattern)
+        var scoreHistory = await db.ArenaScoreHistory
+            .Where(h => h.EntityType == EntityType.Team)
+            .OrderBy(h => h.RecordedAt)
+            .ToListAsync();
+
+        // Группируем историю по (EntityId, MatchPattern) для быстрого поиска
+        var historyLookup = scoreHistory
+            .GroupBy(h => (h.EntityId, h.MatchPattern))
+            .ToDictionary(g => g.Key, g => g.ToList());
+
+        var fixedCount = 0;
+
+        foreach (var match in matches)
+        {
+            var changed = false;
+
+            // Исправляем ScoreBefore/After для TeamA
+            if (match.TeamAId.HasValue &&
+                historyLookup.TryGetValue((match.TeamAId.Value, match.MatchPattern), out var historyA))
+            {
+                var (before, after) = FindScoreAroundMatch(historyA, match.CreatedAt);
+                if (before.HasValue && match.TeamAScoreBefore != before.Value)
+                {
+                    match.TeamAScoreBefore = before.Value;
+                    changed = true;
+                }
+                if (after.HasValue && match.TeamAScoreAfter != after.Value)
+                {
+                    match.TeamAScoreAfter = after.Value;
+                    changed = true;
+                }
+            }
+
+            // Исправляем ScoreBefore/After для TeamB
+            if (match.TeamBId.HasValue &&
+                historyLookup.TryGetValue((match.TeamBId.Value, match.MatchPattern), out var historyB))
+            {
+                var (before, after) = FindScoreAroundMatch(historyB, match.CreatedAt);
+                if (before.HasValue && match.TeamBScoreBefore != before.Value)
+                {
+                    match.TeamBScoreBefore = before.Value;
+                    changed = true;
+                }
+                if (after.HasValue && match.TeamBScoreAfter != after.Value)
+                {
+                    match.TeamBScoreAfter = after.Value;
+                    changed = true;
+                }
+            }
+
+            if (changed)
+                fixedCount++;
+        }
+
+        if (fixedCount > 0)
+            await db.SaveChangesAsync();
+
+        return Ok(new { totalMatches = matches.Count, fixedCount });
+    }
+
+    /// <summary>
+    /// Находит NormalizedScore (Score/MemberCount) до и после матча по времени.
+    /// Берёт ближайшую запись до CreatedAt как "before" и ближайшую после как "after".
+    /// Если MemberCount отсутствует, использует сырой Score.
+    /// </summary>
+    private static (int? Before, int? After) FindScoreAroundMatch(
+        List<ArenaScoreHistory> history, DateTime matchTime)
+    {
+        // history уже отсортирована по RecordedAt ASC
+        ArenaScoreHistory? beforeRecord = null;
+        ArenaScoreHistory? afterRecord = null;
+
+        foreach (var h in history)
+        {
+            if (h.RecordedAt <= matchTime)
+                beforeRecord = h;
+            else
+            {
+                afterRecord = h;
+                break;
+            }
+        }
+
+        // Если afterRecord не найден, но beforeRecord есть — 
+        // возможно матч произошёл после последней записи истории.
+        // В этом случае берём последние две записи как before/after.
+        if (afterRecord is null && beforeRecord is not null)
+        {
+            var idx = history.IndexOf(beforeRecord);
+            if (idx > 0)
+            {
+                afterRecord = beforeRecord;
+                beforeRecord = history[idx - 1];
+            }
+        }
+
+        static int? GetNormalizedScore(ArenaScoreHistory? record)
+        {
+            if (record is null) return null;
+            if (record.MemberCount is > 0)
+                return (int)Math.Round((double)record.Score / record.MemberCount.Value);
+            return record.Score;
+        }
+
+        return (GetNormalizedScore(beforeRecord), GetNormalizedScore(afterRecord));
+    }
+
     [HttpPost("score-history/fix-member-counts")]
     public async Task<IActionResult> FixMemberCounts()
     {
