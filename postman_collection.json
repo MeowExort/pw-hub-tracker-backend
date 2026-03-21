@@ -36,6 +36,24 @@
 							"query": [
 								{ "key": "page", "value": "1" },
 								{ "key": "pageSize", "value": "20" },
+								{ "key": "zoneId", "value": "", "disabled": true },
+								{ "key": "sortBy", "value": "ratingOrder", "disabled": true }
+							]
+						}
+					}
+				},
+				{
+					"name": "Search Teams",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{baseUrl}}/api/arena/teams/search?name=test&page=1&pageSize=20",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "arena", "teams", "search"],
+							"query": [
+								{ "key": "name", "value": "test" },
+								{ "key": "page", "value": "1" },
+								{ "key": "pageSize", "value": "20" },
 								{ "key": "zoneId", "value": "", "disabled": true }
 							]
 						}
@@ -91,6 +109,17 @@
 								{ "key": "limit", "value": "100" },
 								{ "key": "matchPattern", "value": "", "disabled": true }
 							]
+						}
+					}
+				},
+				{
+					"name": "Fix Member Counts",
+					"request": {
+						"method": "POST",
+						"url": {
+							"raw": "{{baseUrl}}/api/arena/teams/score-history/fix-member-counts",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "arena", "teams", "score-history", "fix-member-counts"]
 						}
 					}
 				}

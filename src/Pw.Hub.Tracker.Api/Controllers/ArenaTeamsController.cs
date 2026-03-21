@@ -79,7 +79,15 @@ public class ArenaTeamsController(TrackerDbContext db) : ControllerBase
                 t.WeekResetTimestamp,
                 t.LastVisiteTimestamp,
                 t.UpdatedAt,
-                MemberCount = t.Members.Count
+                MemberCount = t.Members.Count,
+                RatingChaos = t.BattleStats
+                    .Where(s => s.EntityType == EntityType.Team && s.MatchPattern == 1)
+                    .Select(s => t.Members.Count > 0 ? (double)s.Score / t.Members.Count : 0)
+                    .FirstOrDefault(),
+                RatingOrder = t.BattleStats
+                    .Where(s => s.EntityType == EntityType.Team && s.MatchPattern == 0)
+                    .Select(s => t.Members.Count > 0 ? (double)s.Score / t.Members.Count : 0)
+                    .FirstOrDefault()
             })
             .ToListAsync();
 
@@ -104,8 +112,8 @@ public class ArenaTeamsController(TrackerDbContext db) : ControllerBase
 
         int? sortMatchPattern = sortBy?.ToLowerInvariant() switch
         {
-            "ratingorder" => 1,
-            "ratingchaos" => 0,
+            "ratingorder" => 0,
+            "ratingchaos" => 1,
             _ => null
         };
 
@@ -125,6 +133,14 @@ public class ArenaTeamsController(TrackerDbContext db) : ControllerBase
                     t.LastVisiteTimestamp,
                     t.UpdatedAt,
                     MemberCount = t.Members.Count,
+                    RatingChaos = t.BattleStats
+                        .Where(s => s.EntityType == EntityType.Team && s.MatchPattern == 1)
+                        .Select(s => t.Members.Count > 0 ? (double)s.Score / t.Members.Count : 0)
+                        .FirstOrDefault(),
+                    RatingOrder = t.BattleStats
+                        .Where(s => s.EntityType == EntityType.Team && s.MatchPattern == 0)
+                        .Select(s => t.Members.Count > 0 ? (double)s.Score / t.Members.Count : 0)
+                        .FirstOrDefault(),
                     RealRating = t.BattleStats
                         .Where(s => s.EntityType == EntityType.Team && s.MatchPattern == mp)
                         .Select(s => t.Members.Count > 0 ? (double)s.Score / t.Members.Count : 0)
@@ -149,7 +165,15 @@ public class ArenaTeamsController(TrackerDbContext db) : ControllerBase
                     t.WeekResetTimestamp,
                     t.LastVisiteTimestamp,
                     t.UpdatedAt,
-                    MemberCount = t.Members.Count
+                    MemberCount = t.Members.Count,
+                    RatingChaos = t.BattleStats
+                        .Where(s => s.EntityType == EntityType.Team && s.MatchPattern == 1)
+                        .Select(s => t.Members.Count > 0 ? (double)s.Score / t.Members.Count : 0)
+                        .FirstOrDefault(),
+                    RatingOrder = t.BattleStats
+                        .Where(s => s.EntityType == EntityType.Team && s.MatchPattern == 0)
+                        .Select(s => t.Members.Count > 0 ? (double)s.Score / t.Members.Count : 0)
+                        .FirstOrDefault()
                 });
         }
 
@@ -316,6 +340,7 @@ public class ArenaTeamsController(TrackerDbContext db) : ControllerBase
 
         // Загружаем ВСЮ историю команд, упорядоченную от новых к старым (идём от конца к началу)
         var allHistory = await db.ArenaScoreHistory
+            .AsTracking()
             .Where(h => h.EntityType == EntityType.Team)
             .OrderBy(h => h.EntityId)
             .ThenBy(h => h.MatchPattern)
