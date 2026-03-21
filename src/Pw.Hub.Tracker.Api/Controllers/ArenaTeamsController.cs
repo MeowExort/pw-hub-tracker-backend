@@ -199,7 +199,20 @@ public class ArenaTeamsController(TrackerDbContext db) : ControllerBase
                 Members = t.Members.Select(m => new
                 {
                     m.PlayerId,
-                    m.RewardMoneyInfo
+                    m.RewardMoneyInfo,
+                    BattleStats = db.ArenaBattleStats
+                        .Where(s => s.EntityId == m.PlayerId && s.EntityType == EntityType.Player)
+                        .Select(s => new
+                        {
+                            s.MatchPattern,
+                            s.Score,
+                            s.WinCount,
+                            s.BattleCount,
+                            s.WeekBattleCount,
+                            s.WeekWinCount,
+                            s.WeekMaxScore,
+                            s.Rank
+                        }).ToList()
                 }).ToList(),
                 BattleStats = db.ArenaBattleStats
                     .Where(s => s.EntityId == t.Id && s.EntityType == EntityType.Team)
