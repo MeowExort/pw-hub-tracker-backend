@@ -439,6 +439,14 @@ components:
           format: date-time
         memberCount:
           type: integer
+        ratingChaos:
+          type: number
+          format: double
+          description: Rating for matchPattern=1 (score / memberCount)
+        ratingOrder:
+          type: number
+          format: double
+          description: Rating for matchPattern=0 (score / memberCount)
         realRating:
           type: number
           format: double

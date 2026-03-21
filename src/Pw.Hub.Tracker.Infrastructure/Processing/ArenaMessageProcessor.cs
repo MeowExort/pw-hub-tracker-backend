@@ -217,8 +217,8 @@ public class ArenaMessageProcessor(
         long entityId, EntityType entityType, ArenaBattleInfoDto dto)
     {
         const string sql = """
-            INSERT INTO arena_battle_stats ("EntityId", "EntityType", "MatchPattern", "Score", "WinCount", "BattleCount", "WeekBattleCount", "WeekWinCount", "WeekMaxScore", "Rank")
-            VALUES (@EntityId, @EntityType, @MatchPattern, @Score, @WinCount, @BattleCount, @WeekBattleCount, @WeekWinCount, @WeekMaxScore, @Rank)
+            INSERT INTO arena_battle_stats ("EntityId", "EntityType", "MatchPattern", "Score", "WinCount", "BattleCount", "WeekBattleCount", "WeekWinCount", "WeekMaxScore", "Rank", "ArenaTeamId", "ArenaPlayerId")
+            VALUES (@EntityId, @EntityType, @MatchPattern, @Score, @WinCount, @BattleCount, @WeekBattleCount, @WeekWinCount, @WeekMaxScore, @Rank, @ArenaTeamId, @ArenaPlayerId)
             ON CONFLICT ("EntityId", "EntityType", "MatchPattern") DO UPDATE SET
                 "Score" = EXCLUDED."Score",
                 "WinCount" = EXCLUDED."WinCount",
@@ -226,7 +226,9 @@ public class ArenaMessageProcessor(
                 "WeekBattleCount" = EXCLUDED."WeekBattleCount",
                 "WeekWinCount" = EXCLUDED."WeekWinCount",
                 "WeekMaxScore" = EXCLUDED."WeekMaxScore",
-                "Rank" = EXCLUDED."Rank"
+                "Rank" = EXCLUDED."Rank",
+                "ArenaTeamId" = COALESCE(EXCLUDED."ArenaTeamId", arena_battle_stats."ArenaTeamId"),
+                "ArenaPlayerId" = COALESCE(EXCLUDED."ArenaPlayerId", arena_battle_stats."ArenaPlayerId")
             """;
 
         await connection.ExecuteAsync(sql, new
@@ -240,7 +242,9 @@ public class ArenaMessageProcessor(
             dto.WeekBattleCount,
             dto.WeekWinCount,
             dto.WeekMaxScore,
-            dto.Rank
+            dto.Rank,
+            ArenaTeamId = entityType == EntityType.Team ? (long?)entityId : null,
+            ArenaPlayerId = entityType == EntityType.Player ? (long?)entityId : null
         }, transaction);
     }
 

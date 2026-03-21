@@ -19,11 +19,11 @@ builder.Services.AddDbContext<TrackerDbContext>(options =>
 
 var app = builder.Build();
 
-if (app.Environment.IsDevelopment())
+app.UseSwagger();
+app.UseSwaggerUI(c =>
 {
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
+    c.RoutePrefix = "swagger";
+});
 
 app.UseCors();
 
