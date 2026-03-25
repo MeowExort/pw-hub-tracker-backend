@@ -12,6 +12,8 @@ public class TrackerDbContext(DbContextOptions<TrackerDbContext> options) : DbCo
     public DbSet<ArenaScoreHistory> ArenaScoreHistory => Set<ArenaScoreHistory>();
     public DbSet<ArenaMatch> ArenaMatches => Set<ArenaMatch>();
     public DbSet<ArenaMatchParticipant> ArenaMatchParticipants => Set<ArenaMatchParticipant>();
+    public DbSet<PlayerProperty> PlayerProperties => Set<PlayerProperty>();
+    public DbSet<PlayerPropertyHistory> PlayerPropertyHistory => Set<PlayerPropertyHistory>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -75,6 +77,21 @@ public class TrackerDbContext(DbContextOptions<TrackerDbContext> options) : DbCo
             e.HasOne(x => x.Player).WithMany().HasForeignKey(x => x.PlayerId);
             e.HasIndex(x => x.PlayerId);
             e.HasIndex(x => new { x.MatchId, x.TeamId });
+        });
+
+        modelBuilder.Entity<PlayerProperty>(e =>
+        {
+            e.ToTable("player_properties");
+            e.HasKey(x => x.PlayerId);
+            e.Property(x => x.PlayerId).ValueGeneratedNever();
+        });
+
+        modelBuilder.Entity<PlayerPropertyHistory>(e =>
+        {
+            e.ToTable("player_property_history");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Id).UseIdentityAlwaysColumn();
+            e.HasIndex(x => new { x.PlayerId, x.RecordedAt });
         });
     }
 }

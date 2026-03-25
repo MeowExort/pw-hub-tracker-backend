@@ -110,3 +110,68 @@ public record ArenaPlayerDto
     public int Reserve5 { get; init; }
     public int Reserve6 { get; init; }
 }
+
+public record PlayerPropertyMessage
+{
+    public required string Server { get; init; }
+    public long PlayerId { get; init; }
+    public long Hp { get; init; }
+    public long Mp { get; init; }
+
+    [JsonPropertyName("damage_low")]
+    public long DamageLow { get; init; }
+
+    [JsonPropertyName("damage_high")]
+    public long DamageHigh { get; init; }
+
+    [JsonPropertyName("damage_magic_low")]
+    public long DamageMagicLow { get; init; }
+
+    [JsonPropertyName("damage_magic_high")]
+    public long DamageMagicHigh { get; init; }
+
+    public long Defense { get; init; }
+    public List<long> Resistance { get; init; } = [];
+    public long Attack { get; init; }
+    public long Armor { get; init; }
+
+    [JsonPropertyName("attack_speed")]
+    public int AttackSpeed { get; init; }
+
+    [JsonPropertyName("run_speed")]
+    public double RunSpeed { get; init; }
+
+    [JsonPropertyName("attack_degree")]
+    public int AttackDegree { get; init; }
+
+    [JsonPropertyName("defend_degree")]
+    public int DefendDegree { get; init; }
+
+    [JsonPropertyName("crit_rate")]
+    public int CritRate { get; init; }
+
+    [JsonPropertyName("damage_reduce")]
+    public int DamageReduce { get; init; }
+
+    public int Prayspeed { get; init; }
+
+    [JsonPropertyName("crit_damage_bonus")]
+    public int CritDamageBonus { get; init; }
+
+    [JsonPropertyName("invisible_degree")]
+    public int InvisibleDegree { get; init; }
+
+    [JsonPropertyName("anti_invisible_degree")]
+    public int AntiInvisibleDegree { get; init; }
+
+    public long Vigour { get; init; }
+
+    [JsonPropertyName("anti_defense_degree")]
+    public int AntiDefenseDegree { get; init; }
+
+    [JsonPropertyName("anti_resistance_degree")]
+    public int AntiResistanceDegree { get; init; }
+
+    [JsonPropertyName("peak_grade")]
+    public int PeakGrade { get; init; }
+}

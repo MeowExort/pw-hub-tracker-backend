@@ -21,12 +21,14 @@ builder.Services.AddDbContext<TrackerDbContext>(options =>
 builder.Services.AddSingleton(NpgsqlDataSource.Create(postgresConnectionString));
 builder.Services.AddSingleton<ArenaStateCache>();
 builder.Services.AddScoped<ArenaMessageProcessor>();
+builder.Services.AddScoped<PlayerPropertyProcessor>();
 
 var rabbitSection = builder.Configuration.GetSection("RabbitMQ");
 
 builder.Services.AddMassTransit(x =>
 {
     x.AddConsumer<ArenaConsumer>();
+    x.AddConsumer<PlayerPropertyConsumer>();
 
     x.UsingRabbitMq((context, cfg) =>
     {
