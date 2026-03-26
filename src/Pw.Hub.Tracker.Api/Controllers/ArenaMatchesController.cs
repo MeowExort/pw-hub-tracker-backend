@@ -30,6 +30,7 @@ public class ArenaMatchesController(TrackerDbContext db, ILogger<ArenaMatchesCon
                 Participants = m.Participants.Select(p => new
                 {
                     p.PlayerId,
+                    PlayerName = p.Player.Name,
                     p.TeamId,
                     p.PlayerCls,
                     p.ScoreBefore,
