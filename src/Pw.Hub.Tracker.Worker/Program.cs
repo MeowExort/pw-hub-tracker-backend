@@ -22,6 +22,7 @@ builder.Services.AddSingleton(NpgsqlDataSource.Create(postgresConnectionString))
 builder.Services.AddSingleton<ArenaStateCache>();
 builder.Services.AddScoped<ArenaMessageProcessor>();
 builder.Services.AddScoped<PlayerPropertyProcessor>();
+builder.Services.AddScoped<PlayerBaseBriefProcessor>();
 
 var rabbitSection = builder.Configuration.GetSection("RabbitMQ");
 
@@ -29,6 +30,7 @@ builder.Services.AddMassTransit(x =>
 {
     x.AddConsumer<ArenaConsumer>();
     x.AddConsumer<PlayerPropertyConsumer>();
+    x.AddConsumer<PlayerBaseBriefConsumer>();
 
     x.UsingRabbitMq((context, cfg) =>
     {

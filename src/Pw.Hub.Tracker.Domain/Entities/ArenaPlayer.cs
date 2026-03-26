@@ -3,6 +3,7 @@ namespace Pw.Hub.Tracker.Domain.Entities;
 public class ArenaPlayer
 {
     public long Id { get; set; }
+    public string Name { get; set; } = string.Empty;
     public long TeamId { get; set; }
     public int Cls { get; set; }
     public long RewardMoney { get; set; }

@@ -175,3 +175,10 @@ public record PlayerPropertyMessage
     [JsonPropertyName("peak_grade")]
     public int PeakGrade { get; init; }
 }
+
+public record PlayerBaseBriefMessage
+{
+    public required string Server { get; init; }
+    public long RoleId { get; init; }
+    public string Name { get; init; } = string.Empty;
+}
