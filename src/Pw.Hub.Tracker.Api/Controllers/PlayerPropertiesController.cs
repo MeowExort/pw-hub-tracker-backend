@@ -14,39 +14,40 @@ public class PlayerPropertiesController(TrackerDbContext db) : ControllerBase
         if (playerIds is not { Length: > 0 })
             return BadRequest("playerIds must not be empty");
 
-        var properties = await db.PlayerProperties
-            .Where(p => playerIds.Contains(p.PlayerId))
-            .Select(p => new
+        var properties = await db.PlayerPropertyHistory
+            .Where(h => playerIds.Contains(h.PlayerId))
+            .GroupBy(h => new { h.PlayerId, h.Server })
+            .Select(g => new
             {
-                p.PlayerId,
-                PlayerName = db.ArenaPlayers.Where(a => a.Id == p.PlayerId).Select(a => a.Name).FirstOrDefault(),
-                PlayerCls = db.ArenaPlayers.Where(a => a.Id == p.PlayerId).Select(a => (int?)a.Cls).FirstOrDefault(),
-                p.Server,
-                p.Hp,
-                p.Mp,
-                p.DamageLow,
-                p.DamageHigh,
-                p.DamageMagicLow,
-                p.DamageMagicHigh,
-                p.Defense,
-                p.Resistance,
-                p.Attack,
-                p.Armor,
-                p.AttackSpeed,
-                p.RunSpeed,
-                p.AttackDegree,
-                p.DefendDegree,
-                p.CritRate,
-                p.DamageReduce,
-                p.Prayspeed,
-                p.CritDamageBonus,
-                p.InvisibleDegree,
-                p.AntiInvisibleDegree,
-                p.Vigour,
-                p.AntiDefenseDegree,
-                p.AntiResistanceDegree,
-                p.PeakGrade,
-                p.UpdatedAt
+                g.Key.PlayerId,
+                PlayerName = db.ArenaPlayers.Where(a => a.Id == g.Key.PlayerId).Select(a => a.Name).FirstOrDefault(),
+                PlayerCls = db.ArenaPlayers.Where(a => a.Id == g.Key.PlayerId).Select(a => (int?)a.Cls).FirstOrDefault(),
+                g.Key.Server,
+                Hp = g.Max(h => h.Hp),
+                Mp = g.Max(h => h.Mp),
+                DamageLow = g.Max(h => h.DamageLow),
+                DamageHigh = g.Max(h => h.DamageHigh),
+                DamageMagicLow = g.Max(h => h.DamageMagicLow),
+                DamageMagicHigh = g.Max(h => h.DamageMagicHigh),
+                Defense = g.Max(h => h.Defense),
+                Resistance = g.OrderByDescending(h => h.RecordedAt).Select(h => h.Resistance).First(),
+                Attack = g.Max(h => h.Attack),
+                Armor = g.Max(h => h.Armor),
+                AttackSpeed = g.Max(h => h.AttackSpeed),
+                RunSpeed = g.Max(h => h.RunSpeed),
+                AttackDegree = g.Max(h => h.AttackDegree),
+                DefendDegree = g.Max(h => h.DefendDegree),
+                CritRate = g.Max(h => h.CritRate),
+                DamageReduce = g.Max(h => h.DamageReduce),
+                Prayspeed = g.Max(h => h.Prayspeed),
+                CritDamageBonus = g.Max(h => h.CritDamageBonus),
+                InvisibleDegree = g.Max(h => h.InvisibleDegree),
+                AntiInvisibleDegree = g.Max(h => h.AntiInvisibleDegree),
+                Vigour = g.Max(h => h.Vigour),
+                AntiDefenseDegree = g.Max(h => h.AntiDefenseDegree),
+                AntiResistanceDegree = g.Max(h => h.AntiResistanceDegree),
+                PeakGrade = g.Max(h => h.PeakGrade),
+                UpdatedAt = g.Max(h => h.RecordedAt)
             })
             .ToListAsync();
 
