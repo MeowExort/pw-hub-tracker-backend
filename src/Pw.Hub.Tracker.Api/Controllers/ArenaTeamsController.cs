@@ -199,6 +199,8 @@ public class ArenaTeamsController(TrackerDbContext db) : ControllerBase
                 Members = t.Members.Select(m => new
                 {
                     m.PlayerId,
+                    PlayerName = m.Player.Name,
+                    PlayerCls = m.Player.Cls,
                     m.RewardMoneyInfo,
                     BattleStats = db.ArenaBattleStats
                         .Where(s => s.EntityId == m.PlayerId && s.EntityType == EntityType.Player)
@@ -248,6 +250,7 @@ public class ArenaTeamsController(TrackerDbContext db) : ControllerBase
                 Player = new
                 {
                     m.Player.Id,
+                    m.Player.Name,
                     m.Player.Cls,
                     m.Player.LastBattleTimestamp,
                     m.Player.LastVisiteTimestamp,

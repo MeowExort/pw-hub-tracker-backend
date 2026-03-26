@@ -19,6 +19,8 @@ public class PlayerPropertiesController(TrackerDbContext db) : ControllerBase
             .Select(p => new
             {
                 p.PlayerId,
+                PlayerName = db.ArenaPlayers.Where(a => a.Id == p.PlayerId).Select(a => a.Name).FirstOrDefault(),
+                PlayerCls = db.ArenaPlayers.Where(a => a.Id == p.PlayerId).Select(a => (int?)a.Cls).FirstOrDefault(),
                 p.Server,
                 p.Hp,
                 p.Mp,
