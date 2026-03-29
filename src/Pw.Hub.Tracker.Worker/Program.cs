@@ -18,7 +18,8 @@ builder.Services.AddSingleton<IConnectionMultiplexer>(_ =>
 builder.Services.AddDbContext<TrackerDbContext>(options =>
     options.UseNpgsql(postgresConnectionString));
 
-builder.Services.AddSingleton(NpgsqlDataSource.Create(postgresConnectionString));
+var dataSourceBuilder = new NpgsqlDataSourceBuilder(postgresConnectionString);
+builder.Services.AddSingleton(dataSourceBuilder.Build());
 builder.Services.AddSingleton<ArenaStateCache>();
 builder.Services.AddScoped<ArenaMessageProcessor>();
 builder.Services.AddScoped<PlayerPropertyProcessor>();
@@ -39,6 +40,8 @@ builder.Services.AddMassTransit(x =>
             h.Username(rabbitSection["Username"] ?? "guest");
             h.Password(rabbitSection["Password"] ?? "guest");
         });
+
+        cfg.ConcurrentMessageLimit = 10;
 
         cfg.ConfigureEndpoints(context);
     });
