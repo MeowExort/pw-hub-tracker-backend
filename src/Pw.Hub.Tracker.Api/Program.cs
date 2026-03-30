@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using Pw.Hub.Tracker.Infrastructure.Data;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -13,8 +14,11 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
+var postgresConnectionString = new NpgsqlConnectionStringBuilder(
+    builder.Configuration.GetConnectionString("Postgres")) { MaxPoolSize = 20 }.ConnectionString;
+
 builder.Services.AddDbContext<TrackerDbContext>(options =>
-    options.UseNpgsql(builder.Configuration.GetConnectionString("Postgres"))
+    options.UseNpgsql(postgresConnectionString)
         .UseQueryTrackingBehavior(QueryTrackingBehavior.NoTracking));
 
 var app = builder.Build();

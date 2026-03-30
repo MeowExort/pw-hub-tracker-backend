@@ -9,17 +9,19 @@ using StackExchange.Redis;
 
 var builder = Host.CreateApplicationBuilder(args);
 
-var postgresConnectionString = builder.Configuration.GetConnectionString("Postgres")
-                               ?? "Host=localhost;Port=5432;Database=pw_hub_tracker;Username=postgres;Password=postgres";
+var postgresConnectionString = new NpgsqlConnectionStringBuilder(
+    builder.Configuration.GetConnectionString("Postgres")
+    ?? "Host=localhost;Port=5432;Database=pw_hub_tracker;Username=postgres;Password=postgres")
+    { MaxPoolSize = 20 }.ConnectionString;
 
 builder.Services.AddSingleton<IConnectionMultiplexer>(_ =>
     ConnectionMultiplexer.Connect(builder.Configuration.GetConnectionString("Redis") ?? "localhost:6379"));
 
-builder.Services.AddDbContext<TrackerDbContext>(options =>
-    options.UseNpgsql(postgresConnectionString));
+var dataSource = new NpgsqlDataSourceBuilder(postgresConnectionString).Build();
+builder.Services.AddSingleton(dataSource);
 
-var dataSourceBuilder = new NpgsqlDataSourceBuilder(postgresConnectionString);
-builder.Services.AddSingleton(dataSourceBuilder.Build());
+builder.Services.AddDbContext<TrackerDbContext>(options =>
+    options.UseNpgsql(dataSource));
 builder.Services.AddSingleton<ArenaStateCache>();
 builder.Services.AddScoped<ArenaMessageProcessor>();
 builder.Services.AddScoped<PlayerPropertyProcessor>();
