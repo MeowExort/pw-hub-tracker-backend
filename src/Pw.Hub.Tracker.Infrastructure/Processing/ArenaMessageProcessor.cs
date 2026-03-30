@@ -187,12 +187,28 @@ public class ArenaMessageProcessor(
 
     private static async Task UpsertPlayerAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, ArenaPlayerDto dto)
     {
+        // Upsert player base info (Cls) into players table
+        const string playerSql = """
+            INSERT INTO players ("Id", "Name", "Cls", "Gender", "UpdatedAt")
+            VALUES (@Id, '', @Cls, 0, @UpdatedAt)
+            ON CONFLICT ("Id") DO UPDATE SET
+                "Cls" = EXCLUDED."Cls",
+                "UpdatedAt" = EXCLUDED."UpdatedAt"
+            """;
+
+        await connection.ExecuteAsync(playerSql, new
+        {
+            dto.Id,
+            dto.Cls,
+            UpdatedAt = DateTime.UtcNow
+        }, transaction);
+
+        // Upsert arena-specific info into arena_players table
         const string sql = """
-            INSERT INTO arena_players ("Id", "TeamId", "Cls", "RewardMoney", "WeekResetTimestamp", "LastBattleTimestamp", "LastVisiteTimestamp", "UpdatedAt")
-            VALUES (@Id, @TeamId, @Cls, @RewardMoney, @WeekResetTimestamp, @LastBattleTimestamp, @LastVisiteTimestamp, @UpdatedAt)
+            INSERT INTO arena_players ("Id", "TeamId", "RewardMoney", "WeekResetTimestamp", "LastBattleTimestamp", "LastVisiteTimestamp", "UpdatedAt")
+            VALUES (@Id, @TeamId, @RewardMoney, @WeekResetTimestamp, @LastBattleTimestamp, @LastVisiteTimestamp, @UpdatedAt)
             ON CONFLICT ("Id") DO UPDATE SET
                 "TeamId" = EXCLUDED."TeamId",
-                "Cls" = EXCLUDED."Cls",
                 "RewardMoney" = EXCLUDED."RewardMoney",
                 "WeekResetTimestamp" = EXCLUDED."WeekResetTimestamp",
                 "LastBattleTimestamp" = EXCLUDED."LastBattleTimestamp",
@@ -204,7 +220,6 @@ public class ArenaMessageProcessor(
         {
             dto.Id,
             dto.TeamId,
-            dto.Cls,
             dto.RewardMoney,
             dto.WeekResetTimestamp,
             dto.LastBattleTimestamp,
