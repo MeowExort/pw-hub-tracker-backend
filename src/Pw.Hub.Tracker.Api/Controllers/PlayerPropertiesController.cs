@@ -20,8 +20,8 @@ public class PlayerPropertiesController(TrackerDbContext db) : ControllerBase
             .Select(g => new
             {
                 g.Key.PlayerId,
-                PlayerName = db.ArenaPlayers.Where(a => a.Id == g.Key.PlayerId).Select(a => a.Name).FirstOrDefault(),
-                PlayerCls = db.ArenaPlayers.Where(a => a.Id == g.Key.PlayerId).Select(a => (int?)a.Cls).FirstOrDefault(),
+                PlayerName = db.Players.Where(a => a.Id == g.Key.PlayerId).Select(a => a.Name).FirstOrDefault(),
+                PlayerCls = db.Players.Where(a => a.Id == g.Key.PlayerId).Select(a => (int?)a.Cls).FirstOrDefault(),
                 g.Key.Server,
                 Hp = g.Max(h => h.Hp),
                 Mp = g.Max(h => h.Mp),

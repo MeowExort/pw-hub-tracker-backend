@@ -17,9 +17,10 @@ public class ArenaPlayersController(TrackerDbContext db) : ControllerBase
             .Select(p => new
             {
                 p.Id,
-                p.Name,
+                p.Player.Name,
                 p.TeamId,
-                p.Cls,
+                p.Player.Cls,
+                p.Player.Gender,
                 p.RewardMoney,
                 p.WeekResetTimestamp,
                 p.LastBattleTimestamp,

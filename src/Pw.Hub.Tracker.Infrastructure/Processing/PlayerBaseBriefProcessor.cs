@@ -14,10 +14,10 @@ public class PlayerBaseBriefProcessor(
         await using var connection = await dataSource.OpenConnectionAsync();
 
         const string sql = """
-            INSERT INTO arena_players ("Id", "Name", "Cls", "TeamId", "UpdatedAt")
-            VALUES (@RoleId, @Name, @Cls, 0, @UpdatedAt)
+            INSERT INTO players ("Id", "Name", "Cls", "Gender", "UpdatedAt")
+            VALUES (@RoleId, @Name, @Cls, @Gender, @UpdatedAt)
             ON CONFLICT ("Id") DO UPDATE
-            SET "Name" = @Name, "UpdatedAt" = @UpdatedAt
+            SET "Name" = @Name, "Cls" = @Cls, "Gender" = @Gender, "UpdatedAt" = @UpdatedAt
             """;
 
         var affected = await connection.ExecuteAsync(sql, new
@@ -25,6 +25,7 @@ public class PlayerBaseBriefProcessor(
             message.RoleId,
             message.Name,
             message.Cls,
+            message.Gender,
             UpdatedAt = DateTime.UtcNow
         });
 

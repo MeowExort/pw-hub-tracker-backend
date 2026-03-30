@@ -7,6 +7,7 @@ public class TrackerDbContext(DbContextOptions<TrackerDbContext> options) : DbCo
 {
     public DbSet<ArenaTeam> ArenaTeams => Set<ArenaTeam>();
     public DbSet<ArenaTeamMember> ArenaTeamMembers => Set<ArenaTeamMember>();
+    public DbSet<Player> Players => Set<Player>();
     public DbSet<ArenaPlayer> ArenaPlayers => Set<ArenaPlayer>();
     public DbSet<ArenaBattleStats> ArenaBattleStats => Set<ArenaBattleStats>();
     public DbSet<ArenaScoreHistory> ArenaScoreHistory => Set<ArenaScoreHistory>();
@@ -33,12 +34,20 @@ public class TrackerDbContext(DbContextOptions<TrackerDbContext> options) : DbCo
             e.HasOne(x => x.Player).WithMany().HasForeignKey(x => x.PlayerId);
         });
 
+        modelBuilder.Entity<Player>(e =>
+        {
+            e.ToTable("players");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Id).ValueGeneratedNever();
+        });
+
         modelBuilder.Entity<ArenaPlayer>(e =>
         {
             e.ToTable("arena_players");
             e.HasKey(x => x.Id);
             e.Property(x => x.Id).ValueGeneratedNever();
             e.HasOne(x => x.Team).WithMany().HasForeignKey(x => x.TeamId);
+            e.HasOne(x => x.Player).WithMany().HasForeignKey(x => x.Id);
         });
 
         modelBuilder.Entity<ArenaBattleStats>(e =>

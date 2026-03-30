@@ -30,7 +30,7 @@ public class ArenaMatchesController(TrackerDbContext db, ILogger<ArenaMatchesCon
                 Participants = m.Participants.Select(p => new
                 {
                     p.PlayerId,
-                    PlayerName = p.Player.Name,
+                    PlayerName = p.Player.Player.Name,
                     p.TeamId,
                     p.PlayerCls,
                     p.ScoreBefore,
@@ -101,6 +101,7 @@ public class ArenaMatchesController(TrackerDbContext db, ILogger<ArenaMatchesCon
 
             // 2. Загружаем игроков и определяем lastBattleTimestamp для каждой команды
             var players = await db.ArenaPlayers
+                .Include(p => p.Player)
                 .Where(p => p.LastBattleTimestamp > 0)
                 .ToListAsync();
 
@@ -183,7 +184,7 @@ public class ArenaMatchesController(TrackerDbContext db, ILogger<ArenaMatchesCon
                                 MatchId = matchId,
                                 TeamId = teamId,
                                 PlayerId = p.Id,
-                                PlayerCls = p.Cls,
+                                PlayerCls = p.Player.Cls,
                                 ScoreBefore = null,
                                 ScoreAfter = isTeamA ? statA.Score : statB.Score,
                                 IsWinner = false
