@@ -178,7 +178,9 @@ public record PlayerPropertyMessage
 
 public record PlayerBaseBriefMessage
 {
-    public required string Server { get; init; }
+    public string Server { get; init; } = string.Empty;
     public long RoleId { get; init; }
     public string Name { get; init; } = string.Empty;
+    public int Cls { get; init; }
+    public int Gender { get; init; }
 }
