@@ -14,6 +14,19 @@ public class ArenaMessageProcessor(
     ArenaStateCache cache,
     ILogger<ArenaMessageProcessor> logger)
 {
+    private string GetServer(int zoneId)
+    {
+        switch (zoneId)
+        {
+            case 2: return "centaur";
+            case 3: return "alcor";
+            case 5: return "mizar";
+            case 29: return "capella";
+        }
+
+        return "";
+    }
+    
     public async Task ProcessAsync(ArenaEventData data)
     {
         await using var connection = await dataSource.OpenConnectionAsync();
@@ -27,7 +40,7 @@ public class ArenaMessageProcessor(
 
                 var teamPlayers = data.Players.Where(p => p.TeamId == teamDto.Id).ToList();
                 foreach (var playerDto in teamPlayers)
-                    await UpsertPlayerAsync(connection, transaction, playerDto);
+                    await UpsertPlayerAsync(connection, transaction, playerDto, GetServer(teamDto.ZoneId));
 
                 await UpsertTeamMembersAsync(connection, transaction, teamDto);
 
@@ -185,13 +198,13 @@ public class ArenaMessageProcessor(
         }
     }
 
-    private static async Task UpsertPlayerAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, ArenaPlayerDto dto)
+    private static async Task UpsertPlayerAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, ArenaPlayerDto dto, string server)
     {
         // Upsert player base info (Cls) into players table
         const string playerSql = """
-            INSERT INTO players ("Id", "Name", "Cls", "Gender", "UpdatedAt")
-            VALUES (@Id, '', @Cls, 0, @UpdatedAt)
-            ON CONFLICT ("Id") DO UPDATE SET
+            INSERT INTO players ("Id", "Server", "Name", "Cls", "Gender", "UpdatedAt")
+            VALUES (@Id, @Server, '', @Cls, 0, @UpdatedAt)
+            ON CONFLICT ("Id", "Server") DO UPDATE SET
                 "Cls" = EXCLUDED."Cls",
                 "UpdatedAt" = EXCLUDED."UpdatedAt"
             """;
@@ -199,15 +212,16 @@ public class ArenaMessageProcessor(
         await connection.ExecuteAsync(playerSql, new
         {
             dto.Id,
+            server,
             dto.Cls,
             UpdatedAt = DateTime.UtcNow
         }, transaction);
 
         // Upsert arena-specific info into arena_players table
         const string sql = """
-            INSERT INTO arena_players ("Id", "TeamId", "RewardMoney", "WeekResetTimestamp", "LastBattleTimestamp", "LastVisiteTimestamp", "UpdatedAt")
-            VALUES (@Id, @TeamId, @RewardMoney, @WeekResetTimestamp, @LastBattleTimestamp, @LastVisiteTimestamp, @UpdatedAt)
-            ON CONFLICT ("Id") DO UPDATE SET
+            INSERT INTO arena_players ("Id", "Server", "TeamId", "RewardMoney", "WeekResetTimestamp", "LastBattleTimestamp", "LastVisiteTimestamp", "UpdatedAt")
+            VALUES (@Id, @Server, @TeamId, @RewardMoney, @WeekResetTimestamp, @LastBattleTimestamp, @LastVisiteTimestamp, @UpdatedAt)
+            ON CONFLICT ("Id", "Server") DO UPDATE SET
                 "TeamId" = EXCLUDED."TeamId",
                 "RewardMoney" = EXCLUDED."RewardMoney",
                 "WeekResetTimestamp" = EXCLUDED."WeekResetTimestamp",

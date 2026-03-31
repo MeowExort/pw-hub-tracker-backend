@@ -47,8 +47,7 @@ public class PlayerPropertyProcessor(
                 @AttackSpeed, @RunSpeed, @AttackDegree, @DefendDegree, @CritRate, @DamageReduce,
                 @Prayspeed, @CritDamageBonus, @InvisibleDegree, @AntiInvisibleDegree, @Vigour,
                 @AntiDefenseDegree, @AntiResistanceDegree, @PeakGrade, @UpdatedAt)
-            ON CONFLICT ("PlayerId") DO UPDATE SET
-                "Server" = EXCLUDED."Server",
+            ON CONFLICT ("PlayerId", "Server") DO UPDATE SET
                 "Hp" = EXCLUDED."Hp",
                 "Mp" = EXCLUDED."Mp",
                 "DamageLow" = EXCLUDED."DamageLow",

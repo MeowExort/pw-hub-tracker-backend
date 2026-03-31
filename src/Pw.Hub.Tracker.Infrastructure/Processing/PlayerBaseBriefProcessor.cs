@@ -26,6 +26,7 @@ public class PlayerBaseBriefProcessor(
             message.Name,
             message.Cls,
             message.Gender,
+            message.Server,
             UpdatedAt = DateTime.UtcNow
         });
 
