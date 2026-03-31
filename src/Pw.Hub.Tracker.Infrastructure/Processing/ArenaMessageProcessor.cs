@@ -19,7 +19,7 @@ public class ArenaMessageProcessor(
         switch (zoneId)
         {
             case 2: return "centaur";
-            case 3: return "alcor";
+            case 3: return "alkor";
             case 5: return "mizar";
             case 29: return "capella";
         }
