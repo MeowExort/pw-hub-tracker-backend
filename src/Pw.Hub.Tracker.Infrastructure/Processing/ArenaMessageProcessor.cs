@@ -74,7 +74,7 @@ public class ArenaMessageProcessor(
                         {
                             var matchId = GenerateMatchId(battleTimestamp, battleInfo.MatchPattern);
                             await SaveMatchAsync(connection, transaction, matchId, teamDto.Id,
-                                battleInfo.MatchPattern, isWin, prevTeam.Score, battleInfo.Score, participants);
+                                battleInfo.MatchPattern, isWin, prevTeam.Score, battleInfo.Score, participants, GetServer(teamDto.ZoneId));
                         }
 
                         await RecordScoreHistoryAsync(connection, transaction, teamDto.Id, EntityType.Team, battleInfo, teamDto.Members.Count);
@@ -322,7 +322,7 @@ public class ArenaMessageProcessor(
     private async Task SaveMatchAsync(NpgsqlConnection connection, NpgsqlTransaction transaction,
         long matchId, long teamId, int matchPattern,
         bool isWin, int scoreBefore, int scoreAfter,
-        List<(long PlayerId, int Cls, int? ScoreBefore, int? ScoreAfter)> participants)
+        List<(long PlayerId, int Cls, int? ScoreBefore, int? ScoreAfter)> participants, string server)
     {
         // Проверяем существующий матч
         var existing = await connection.QueryFirstOrDefaultAsync<(long? TeamAId, long? TeamBId)>("""
@@ -386,9 +386,9 @@ public class ArenaMessageProcessor(
 
         // Сохраняем участников
         const string participantSql = """
-            INSERT INTO arena_match_participants ("MatchId", "TeamId", "PlayerId", "PlayerCls", "ScoreBefore", "ScoreAfter", "IsWinner")
-            VALUES (@MatchId, @TeamId, @PlayerId, @PlayerCls, @ScoreBefore, @ScoreAfter, @IsWinner)
-            ON CONFLICT ("MatchId", "PlayerId") DO UPDATE SET
+            INSERT INTO arena_match_participants ("MatchId", "TeamId", "PlayerId", "PlayerServer", "PlayerCls", "ScoreBefore", "ScoreAfter", "IsWinner")
+            VALUES (@MatchId, @TeamId, @PlayerId, @PlayerServer, @PlayerCls, @ScoreBefore, @ScoreAfter, @IsWinner)
+            ON CONFLICT ("MatchId", "PlayerId", "PlayerServer") DO UPDATE SET
                 "ScoreBefore" = EXCLUDED."ScoreBefore",
                 "ScoreAfter" = EXCLUDED."ScoreAfter",
                 "IsWinner" = EXCLUDED."IsWinner"
@@ -401,6 +401,7 @@ public class ArenaMessageProcessor(
                 MatchId = matchId,
                 TeamId = teamId,
                 PlayerId = playerId,
+                PlayerServer = server,
                 PlayerCls = cls,
                 ScoreBefore = pScoreBefore,
                 ScoreAfter = pScoreAfter,
