@@ -13,16 +13,27 @@ public class ClassAnalyticsController(TrackerDbContext db) : ControllerBase
         var query = db.ArenaMatchParticipants.AsQueryable();
         if (matchPattern.HasValue)
             query = query.Where(p => p.Match.MatchPattern == matchPattern.Value);
-        var distribution = await query
+        var raw = await query
             .GroupBy(p => p.PlayerCls)
             .Select(g => new
             {
                 Cls = g.Key,
-                Count = g.Count(),
-                UniquePlayers = g.Select(p => new { p.PlayerId, p.PlayerServer }).Distinct().Count()
+                Count = g.Count()
             })
             .OrderByDescending(x => x.Count)
             .ToListAsync();
+        var uniqueByClass = (await query
+            .Select(p => new { p.PlayerCls, p.PlayerId, p.PlayerServer })
+            .Distinct()
+            .ToListAsync())
+            .GroupBy(p => p.PlayerCls)
+            .ToDictionary(g => g.Key, g => g.Count());
+        var distribution = raw.Select(r => new
+        {
+            r.Cls,
+            r.Count,
+            UniquePlayers = uniqueByClass.GetValueOrDefault(r.Cls, 0)
+        }).ToList();
         return Ok(distribution);
     }
     [HttpGet("winrate")]
@@ -31,19 +42,27 @@ public class ClassAnalyticsController(TrackerDbContext db) : ControllerBase
         var query = db.ArenaMatchParticipants.AsQueryable();
         if (matchPattern.HasValue)
             query = query.Where(p => p.Match.MatchPattern == matchPattern.Value);
-        var winrate = await query
+        var rawWinrate = await query
             .GroupBy(p => p.PlayerCls)
             .Select(g => new
             {
                 Cls = g.Key,
                 TotalMatches = g.Count(),
-                Wins = g.Count(p => p.IsWinner),
-                WinRate = g.Count() > 0
-                    ? Math.Round((double)g.Count(p => p.IsWinner) / g.Count() * 100, 2)
+                Wins = g.Count(p => p.IsWinner)
+            })
+            .ToListAsync();
+        var winrate = rawWinrate
+            .Select(g => new
+            {
+                g.Cls,
+                g.TotalMatches,
+                g.Wins,
+                WinRate = g.TotalMatches > 0
+                    ? Math.Round((double)g.Wins / g.TotalMatches * 100, 2)
                     : 0
             })
             .OrderByDescending(x => x.WinRate)
-            .ToListAsync();
+            .ToList();
         return Ok(winrate);
     }
     [HttpGet("average-score")]
@@ -53,7 +72,7 @@ public class ClassAnalyticsController(TrackerDbContext db) : ControllerBase
             .Where(s => s.EntityType == EntityType.Player);
         if (matchPattern.HasValue)
             query = query.Where(s => s.MatchPattern == matchPattern.Value);
-        var avgScore = await query
+        var rawAvgScore = await query
             .Join(db.Players,
                 s => new { Id = s.EntityId, s.Server },
                 p => new { p.Id, p.Server },
@@ -62,11 +81,17 @@ public class ClassAnalyticsController(TrackerDbContext db) : ControllerBase
             .Select(g => new
             {
                 Cls = g.Key,
-                AverageScore = Math.Round(g.Average(x => (double)x.Score), 2),
+                AverageScore = g.Average(x => (double)x.Score),
                 PlayerCount = g.Count()
             })
             .OrderByDescending(x => x.AverageScore)
             .ToListAsync();
+        var avgScore = rawAvgScore.Select(x => new
+        {
+            x.Cls,
+            AverageScore = Math.Round(x.AverageScore, 2),
+            x.PlayerCount
+        }).ToList();
         return Ok(avgScore);
     }
     [HttpGet("popular-compositions")]

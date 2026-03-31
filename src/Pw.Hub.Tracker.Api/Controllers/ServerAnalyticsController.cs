@@ -54,18 +54,26 @@ public class ServerAnalyticsController(TrackerDbContext db) : ControllerBase
             .Where(s => s.EntityType == EntityType.Player);
         if (matchPattern.HasValue)
             query = query.Where(s => s.MatchPattern == matchPattern.Value);
-        var data = await query
+        var rawData = await query
             .GroupBy(s => s.Server)
             .Select(g => new
             {
                 Server = g.Key,
-                AverageScore = Math.Round(g.Average(s => (double)s.Score), 2),
+                AverageScore = g.Average(s => (double)s.Score),
                 PlayerCount = g.Count(),
                 MaxScore = g.Max(s => s.Score),
                 MinScore = g.Min(s => s.Score)
             })
             .OrderByDescending(x => x.AverageScore)
             .ToListAsync();
+        var data = rawData.Select(x => new
+        {
+            x.Server,
+            AverageScore = Math.Round(x.AverageScore, 2),
+            x.PlayerCount,
+            x.MaxScore,
+            x.MinScore
+        }).ToList();
         return Ok(data);
     }
     [HttpGet("player-stats-comparison")]
