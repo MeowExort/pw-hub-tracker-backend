@@ -15,7 +15,12 @@ var postgresConnectionString = new NpgsqlConnectionStringBuilder(
     { MaxPoolSize = 20 }.ConnectionString;
 
 builder.Services.AddSingleton<IConnectionMultiplexer>(_ =>
-    ConnectionMultiplexer.Connect(builder.Configuration.GetConnectionString("Redis") ?? "localhost:6379"));
+{
+    var redisConnection = builder.Configuration.GetConnectionString("Redis") ?? "localhost:6379";
+    var options = ConfigurationOptions.Parse(redisConnection);
+    options.AbortOnConnectFail = false;
+    return ConnectionMultiplexer.Connect(options);
+});
 
 var dataSource = new NpgsqlDataSourceBuilder(postgresConnectionString).Build();
 builder.Services.AddSingleton(dataSource);
