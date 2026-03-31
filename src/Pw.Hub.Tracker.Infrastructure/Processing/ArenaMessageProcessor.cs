@@ -42,7 +42,7 @@ public class ArenaMessageProcessor(
                 foreach (var playerDto in teamPlayers)
                     await UpsertPlayerAsync(connection, transaction, playerDto, GetServer(teamDto.ZoneId));
 
-                await UpsertTeamMembersAsync(connection, transaction, teamDto);
+                await UpsertTeamMembersAsync(connection, transaction, teamDto, GetServer(teamDto.ZoneId));
 
                 // Шаг 1: Определяем lastBattleTimestamp — МАКСИМАЛЬНЫЙ среди всех игроков команды
                 var battleTimestamp = teamPlayers
@@ -163,27 +163,27 @@ public class ArenaMessageProcessor(
         }, transaction);
     }
 
-    private static async Task UpsertTeamMembersAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, ArenaTeamDto dto)
+    private static async Task UpsertTeamMembersAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, ArenaTeamDto dto, string server)
     {
         var incomingIds = dto.Members.Select(m => m.ArenaPlayerId).ToArray();
 
         if (incomingIds.Length > 0)
         {
             await connection.ExecuteAsync(
-                "DELETE FROM arena_team_members WHERE \"TeamId\" = @TeamId AND \"PlayerId\" != ALL(@PlayerIds)",
-                new { TeamId = dto.Id, PlayerIds = incomingIds }, transaction);
+                "DELETE FROM arena_team_members WHERE \"TeamId\" = @TeamId AND \"PlayerServer\" = @PlayerServer AND \"PlayerId\" != ALL(@PlayerIds)",
+                new { TeamId = dto.Id, PlayerServer = server, PlayerIds = incomingIds }, transaction);
         }
         else
         {
             await connection.ExecuteAsync(
-                "DELETE FROM arena_team_members WHERE \"TeamId\" = @TeamId",
-                new { TeamId = dto.Id }, transaction);
+                "DELETE FROM arena_team_members WHERE \"TeamId\" = @TeamId AND \"PlayerServer\" = @PlayerServer",
+                new { TeamId = dto.Id, PlayerServer = server }, transaction);
         }
 
         const string sql = """
-            INSERT INTO arena_team_members ("TeamId", "PlayerId", "RewardMoneyInfo")
-            VALUES (@TeamId, @PlayerId, @RewardMoneyInfo)
-            ON CONFLICT ("TeamId", "PlayerId") DO UPDATE SET
+            INSERT INTO arena_team_members ("TeamId", "PlayerId", "PlayerServer", "RewardMoneyInfo")
+            VALUES (@TeamId, @PlayerId, @PlayerServer, @RewardMoneyInfo)
+            ON CONFLICT ("TeamId", "PlayerId", "PlayerServer") DO UPDATE SET
                 "RewardMoneyInfo" = EXCLUDED."RewardMoneyInfo"
             """;
 
@@ -193,6 +193,7 @@ public class ArenaMessageProcessor(
             {
                 TeamId = dto.Id,
                 PlayerId = member.ArenaPlayerId,
+                PlayerServer = server,
                 member.RewardMoneyInfo
             }, transaction);
         }
