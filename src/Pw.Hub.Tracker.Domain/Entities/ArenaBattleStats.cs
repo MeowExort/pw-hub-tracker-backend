@@ -9,6 +9,7 @@ public enum EntityType : short
 public class ArenaBattleStats
 {
     public long EntityId { get; set; }
+    public string Server { get; set; }
     public EntityType EntityType { get; set; }
     public int MatchPattern { get; set; }
     public int Score { get; set; }

@@ -29,9 +29,12 @@ public class TrackerDbContext(DbContextOptions<TrackerDbContext> options) : DbCo
         modelBuilder.Entity<ArenaTeamMember>(e =>
         {
             e.ToTable("arena_team_members");
-            e.HasKey(x => new { x.TeamId, x.PlayerId });
+            e.HasKey(x => new { x.TeamId, x.PlayerId, x.PlayerServer });
             e.HasOne(x => x.Team).WithMany(t => t.Members).HasForeignKey(x => x.TeamId);
-            e.HasOne(x => x.Player).WithMany().HasForeignKey(x => x.PlayerId);
+            e.HasOne(x => x.Player)
+                .WithMany()
+                .HasForeignKey(x => new { x.PlayerId, x.PlayerServer })
+                .HasPrincipalKey(x => new { x.Id, x.PlayerServer });
         });
 
         modelBuilder.Entity<Player>(e =>
@@ -44,7 +47,7 @@ public class TrackerDbContext(DbContextOptions<TrackerDbContext> options) : DbCo
         modelBuilder.Entity<ArenaPlayer>(e =>
         {
             e.ToTable("arena_players");
-            e.HasKey(x => x.Id);
+            e.HasKey(x => new {x.Id, x.PlayerServer});
             e.Property(x => x.Id).ValueGeneratedNever();
             e.HasOne(x => x.Team).WithMany().HasForeignKey(x => x.TeamId);
             e.HasOne(ap => ap.Player)
@@ -56,16 +59,16 @@ public class TrackerDbContext(DbContextOptions<TrackerDbContext> options) : DbCo
         modelBuilder.Entity<ArenaBattleStats>(e =>
         {
             e.ToTable("arena_battle_stats");
-            e.HasKey(x => new { x.EntityId, x.EntityType, x.MatchPattern });
+            e.HasKey(x => new { x.EntityId, x.Server, x.EntityType, x.MatchPattern });
         });
 
         modelBuilder.Entity<ArenaScoreHistory>(e =>
         {
             e.ToTable("arena_score_history");
-            e.HasKey(x => x.Id);
+            e.HasKey(x => new {x.Id, x.Server});
             e.Property(x => x.Id).UseIdentityAlwaysColumn();
             e.Ignore(x => x.NormalizedScore);
-            e.HasIndex(x => new { x.EntityId, x.EntityType, x.MatchPattern, x.RecordedAt });
+            e.HasIndex(x => new { x.EntityId, x.Server, x.EntityType, x.MatchPattern, x.RecordedAt });
         });
 
         modelBuilder.Entity<ArenaMatch>(e =>
@@ -86,8 +89,10 @@ public class TrackerDbContext(DbContextOptions<TrackerDbContext> options) : DbCo
             e.HasKey(x => new { x.MatchId, x.PlayerId });
             e.HasOne(x => x.Match).WithMany(m => m.Participants).HasForeignKey(x => x.MatchId);
             e.HasOne(x => x.Team).WithMany().HasForeignKey(x => x.TeamId);
-            e.HasOne(x => x.Player).WithMany().HasForeignKey(x => x.PlayerId);
-            e.HasIndex(x => x.PlayerId);
+            e.HasOne(x => x.Player)
+                .WithMany()
+                .HasForeignKey(x => new { x.PlayerId, x.PlayerServer })
+                .HasPrincipalKey(x => new { x.Id, x.PlayerServer });
             e.HasIndex(x => new { x.MatchId, x.TeamId });
         });
 
@@ -104,7 +109,7 @@ public class TrackerDbContext(DbContextOptions<TrackerDbContext> options) : DbCo
             e.HasKey(x => x.Id);
             e.Property(x => x.Id).UseIdentityAlwaysColumn();
             e.HasIndex(x=>  new { x.PlayerId, x.Server });
-            e.HasIndex(x => new { x.PlayerId, x.RecordedAt });
+            e.HasIndex(x => new { x.PlayerId, x.Server, x.RecordedAt });
         });
     }
 }

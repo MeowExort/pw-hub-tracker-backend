@@ -199,11 +199,12 @@ public class ArenaTeamsController(TrackerDbContext db) : ControllerBase
                 Members = t.Members.Select(m => new
                 {
                     m.PlayerId,
+                    m.PlayerServer,
                     PlayerName = m.Player.Player.Name,
                     PlayerCls = m.Player.Player.Cls,
                     m.RewardMoneyInfo,
                     BattleStats = db.ArenaBattleStats
-                        .Where(s => s.EntityId == m.PlayerId && s.EntityType == EntityType.Player)
+                        .Where(s => s.EntityId == m.PlayerId && s.Server == m.PlayerServer && s.EntityType == EntityType.Player)
                         .Select(s => new
                         {
                             s.MatchPattern,
@@ -250,12 +251,13 @@ public class ArenaTeamsController(TrackerDbContext db) : ControllerBase
                 Player = new
                 {
                     m.Player.Id,
+                    Server = m.Player.PlayerServer,
                     m.Player.Player.Name,
                     m.Player.Player.Cls,
                     m.Player.LastBattleTimestamp,
                     m.Player.LastVisiteTimestamp,
                     BattleStats = db.ArenaBattleStats
-                        .Where(s => s.EntityId == m.PlayerId && s.EntityType == EntityType.Player)
+                        .Where(s => s.EntityId == m.PlayerId && s.Server == m.PlayerServer && s.EntityType == EntityType.Player)
                         .Select(s => new
                         {
                             s.MatchPattern,
@@ -343,190 +345,5 @@ public class ArenaTeamsController(TrackerDbContext db) : ControllerBase
             .ToListAsync();
 
         return Ok(history);
-    }
-
-    [HttpPost("matches/fix-score-changes")]
-    public async Task<IActionResult> FixMatchScoreChanges()
-    {
-        // Загружаем все матчи, у которых есть обе команды
-        var matches = await db.ArenaMatches
-            .AsTracking()
-            .Where(m => m.TeamAId != null && m.TeamBId != null)
-            .OrderBy(m => m.CreatedAt)
-            .ToListAsync();
-
-        // Загружаем всю историю рейтинга команд, сгруппированную по (EntityId, MatchPattern)
-        var scoreHistory = await db.ArenaScoreHistory
-            .Where(h => h.EntityType == EntityType.Team)
-            .OrderBy(h => h.RecordedAt)
-            .ToListAsync();
-
-        // Группируем историю по (EntityId, MatchPattern) для быстрого поиска
-        var historyLookup = scoreHistory
-            .GroupBy(h => (h.EntityId, h.MatchPattern))
-            .ToDictionary(g => g.Key, g => g.ToList());
-
-        var fixedCount = 0;
-
-        foreach (var match in matches)
-        {
-            var changed = false;
-
-            // Исправляем ScoreBefore/After для TeamA
-            if (match.TeamAId.HasValue &&
-                historyLookup.TryGetValue((match.TeamAId.Value, match.MatchPattern), out var historyA))
-            {
-                var (before, after) = FindScoreAroundMatch(historyA, match.CreatedAt);
-                if (before.HasValue && match.TeamAScoreBefore != before.Value)
-                {
-                    match.TeamAScoreBefore = before.Value;
-                    changed = true;
-                }
-                if (after.HasValue && match.TeamAScoreAfter != after.Value)
-                {
-                    match.TeamAScoreAfter = after.Value;
-                    changed = true;
-                }
-            }
-
-            // Исправляем ScoreBefore/After для TeamB
-            if (match.TeamBId.HasValue &&
-                historyLookup.TryGetValue((match.TeamBId.Value, match.MatchPattern), out var historyB))
-            {
-                var (before, after) = FindScoreAroundMatch(historyB, match.CreatedAt);
-                if (before.HasValue && match.TeamBScoreBefore != before.Value)
-                {
-                    match.TeamBScoreBefore = before.Value;
-                    changed = true;
-                }
-                if (after.HasValue && match.TeamBScoreAfter != after.Value)
-                {
-                    match.TeamBScoreAfter = after.Value;
-                    changed = true;
-                }
-            }
-
-            if (changed)
-                fixedCount++;
-        }
-
-        if (fixedCount > 0)
-            await db.SaveChangesAsync();
-
-        return Ok(new { totalMatches = matches.Count, fixedCount });
-    }
-
-    /// <summary>
-    /// Находит NormalizedScore (Score/MemberCount) до и после матча по времени.
-    /// Берёт ближайшую запись до CreatedAt как "before" и ближайшую после как "after".
-    /// Если MemberCount отсутствует, использует сырой Score.
-    /// </summary>
-    private static (int? Before, int? After) FindScoreAroundMatch(
-        List<ArenaScoreHistory> history, DateTime matchTime)
-    {
-        // history уже отсортирована по RecordedAt ASC
-        ArenaScoreHistory? beforeRecord = null;
-        ArenaScoreHistory? afterRecord = null;
-
-        foreach (var h in history)
-        {
-            if (h.RecordedAt <= matchTime)
-                beforeRecord = h;
-            else
-            {
-                afterRecord = h;
-                break;
-            }
-        }
-
-        // Если afterRecord не найден, но beforeRecord есть — 
-        // возможно матч произошёл после последней записи истории.
-        // В этом случае берём последние две записи как before/after.
-        if (afterRecord is null && beforeRecord is not null)
-        {
-            var idx = history.IndexOf(beforeRecord);
-            if (idx > 0)
-            {
-                afterRecord = beforeRecord;
-                beforeRecord = history[idx - 1];
-            }
-        }
-
-        static int? GetNormalizedScore(ArenaScoreHistory? record)
-        {
-            if (record is null) return null;
-            if (record.MemberCount is > 0)
-                return (int)Math.Round((double)record.Score / record.MemberCount.Value);
-            return record.Score;
-        }
-
-        return (GetNormalizedScore(beforeRecord), GetNormalizedScore(afterRecord));
-    }
-
-    [HttpPost("score-history/fix-member-counts")]
-    public async Task<IActionResult> FixMemberCounts()
-    {
-        // Текущее количество членов команды — используем как fallback для последней записи
-        var teamMemberCounts = await db.ArenaTeamMembers
-            .GroupBy(m => m.TeamId)
-            .Select(g => new { TeamId = g.Key, Count = g.Count() })
-            .ToDictionaryAsync(x => x.TeamId, x => x.Count);
-
-        // Загружаем ВСЮ историю команд, упорядоченную от новых к старым (идём от конца к началу)
-        var allHistory = await db.ArenaScoreHistory
-            .AsTracking()
-            .Where(h => h.EntityType == EntityType.Team)
-            .OrderBy(h => h.EntityId)
-            .ThenBy(h => h.MatchPattern)
-            .ThenByDescending(h => h.RecordedAt)
-            .ToListAsync();
-
-        var fixedCount = 0;
-        var details = new List<object>();
-
-        ArenaScoreHistory? prevTeamHistory = null;
-        for (var i = 0; i < allHistory.Count; i++)
-        {
-            var current = allHistory[i];
-            var isSameGroup = prevTeamHistory is not null
-                              && prevTeamHistory.EntityId == current.EntityId
-                              && prevTeamHistory.MatchPattern == current.MatchPattern;
-
-            if (current.MemberCount == null)
-            {
-                if (!isSameGroup)
-                {
-                    // Самая актуальная запись группы — ставим текущее количество игроков
-                    if (teamMemberCounts.TryGetValue(current.EntityId, out var count))
-                        current.MemberCount = count;
-                }
-                else
-                {
-                    // prevTeamHistory — более новая запись (уже обработана)
-                    // current — более старая запись
-                    // diff = prevTeamHistory.Score - current.Score
-                    var scoreDiff = Math.Abs(prevTeamHistory!.Score - current.Score);
-                    if (scoreDiff < 1000)
-                    {
-                        current.MemberCount = prevTeamHistory.MemberCount;
-                    }
-                    else
-                    {
-                        var memberDiff = scoreDiff / 1000;
-                        current.MemberCount = prevTeamHistory.MemberCount - memberDiff;
-                    }
-                }
-
-                if (current.MemberCount.HasValue)
-                    fixedCount++;
-            }
-
-            prevTeamHistory = current;
-        }
-
-        if (fixedCount > 0)
-            await db.SaveChangesAsync();
-
-        return Ok(new { totalRecords = allHistory.Count, fixedCount, details });
     }
 }

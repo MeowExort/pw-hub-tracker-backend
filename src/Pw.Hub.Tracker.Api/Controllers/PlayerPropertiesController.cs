@@ -1,21 +1,42 @@
+using System.Linq.Expressions;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Pw.Hub.Tracker.Domain.Entities;
 using Pw.Hub.Tracker.Infrastructure.Data;
 
 namespace Pw.Hub.Tracker.Api.Controllers;
+
+public class ByIds
+{
+    public long Id { get; set; }
+    public string Server { get; set; }
+}
 
 [ApiController]
 [Route("api/players/properties")]
 public class PlayerPropertiesController(TrackerDbContext db) : ControllerBase
 {
     [HttpPost("by-ids")]
-    public async Task<IActionResult> GetByIds([FromBody] long[] playerIds)
+    public async Task<IActionResult> GetByIds([FromBody] ByIds[] players)
     {
-        if (playerIds is not { Length: > 0 })
+        if (players is not { Length: > 0 })
             return BadRequest("playerIds must not be empty");
 
+        var param = Expression.Parameter(typeof(PlayerPropertyHistory), "h");
+        Expression? filter = null;
+        foreach (var p in players)
+        {
+            var condition = Expression.AndAlso(
+                Expression.Equal(Expression.Property(param, nameof(PlayerPropertyHistory.PlayerId)), Expression.Constant(p.Id)),
+                Expression.Equal(Expression.Property(param, nameof(PlayerPropertyHistory.Server)), Expression.Constant(p.Server))
+            );
+            filter = filter == null ? condition : Expression.OrElse(filter, condition);
+        }
+
+        var predicate = Expression.Lambda<Func<PlayerPropertyHistory, bool>>(filter!, param);
+
         var properties = await db.PlayerPropertyHistory
-            .Where(h => playerIds.Contains(h.PlayerId))
+            .Where(predicate)
             .GroupBy(h => new { h.PlayerId, h.Server })
             .Select(g => new
             {

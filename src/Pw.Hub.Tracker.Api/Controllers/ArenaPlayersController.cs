@@ -9,14 +9,15 @@ namespace Pw.Hub.Tracker.Api.Controllers;
 [Route("api/arena/players")]
 public class ArenaPlayersController(TrackerDbContext db) : ControllerBase
 {
-    [HttpGet("{playerId:long}")]
-    public async Task<IActionResult> GetById(long playerId)
+    [HttpGet("{server}/{playerId:long}")]
+    public async Task<IActionResult> GetById(string server, long playerId)
     {
         var player = await db.ArenaPlayers
-            .Where(p => p.Id == playerId)
+            .Where(p => p.Id == playerId && p.PlayerServer == server)
             .Select(p => new
             {
                 p.Id,
+                Server = p.PlayerServer,
                 p.Player.Name,
                 p.TeamId,
                 p.Player.Cls,
@@ -48,8 +49,9 @@ public class ArenaPlayersController(TrackerDbContext db) : ControllerBase
         return Ok(player);
     }
 
-    [HttpGet("{playerId:long}/matches")]
+    [HttpGet("{server}/{playerId:long}/matches")]
     public async Task<IActionResult> GetMatches(
+        string server,
         long playerId,
         [FromQuery] int? matchPattern,
         [FromQuery] int page = 1,
@@ -58,7 +60,7 @@ public class ArenaPlayersController(TrackerDbContext db) : ControllerBase
         pageSize = Math.Clamp(pageSize, 1, 100);
 
         var query = db.ArenaMatchParticipants
-            .Where(p => p.PlayerId == playerId);
+            .Where(p => p.PlayerId == playerId && p.PlayerServer == server);
 
         if (matchPattern.HasValue)
             query = query.Where(p => p.Match.MatchPattern == matchPattern.Value);
@@ -91,8 +93,9 @@ public class ArenaPlayersController(TrackerDbContext db) : ControllerBase
         return Ok(new { total, page, pageSize, items = matches });
     }
 
-    [HttpGet("{playerId:long}/score-history")]
+    [HttpGet("{server}/{playerId:long}/score-history")]
     public async Task<IActionResult> GetScoreHistory(
+        string server,
         long playerId,
         [FromQuery] int? matchPattern,
         [FromQuery] int limit = 100)
@@ -100,7 +103,7 @@ public class ArenaPlayersController(TrackerDbContext db) : ControllerBase
         limit = Math.Clamp(limit, 1, 1000);
 
         var query = db.ArenaScoreHistory
-            .Where(h => h.EntityId == playerId && h.EntityType == EntityType.Player);
+            .Where(h => h.EntityId == playerId && h.Server == server && h.EntityType == EntityType.Player);
 
         if (matchPattern.HasValue)
             query = query.Where(h => h.MatchPattern == matchPattern.Value);
