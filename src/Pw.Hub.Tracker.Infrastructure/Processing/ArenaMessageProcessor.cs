@@ -219,7 +219,7 @@ public class ArenaMessageProcessor(
 
         // Upsert arena-specific info into arena_players table
         const string sql = """
-            INSERT INTO arena_players ("Id", "Server", "TeamId", "RewardMoney", "WeekResetTimestamp", "LastBattleTimestamp", "LastVisiteTimestamp", "UpdatedAt")
+            INSERT INTO arena_players ("Id", "PlayerServer", "TeamId", "RewardMoney", "WeekResetTimestamp", "LastBattleTimestamp", "LastVisiteTimestamp", "UpdatedAt")
             VALUES (@Id, @Server, @TeamId, @RewardMoney, @WeekResetTimestamp, @LastBattleTimestamp, @LastVisiteTimestamp, @UpdatedAt)
             ON CONFLICT ("Id", "Server") DO UPDATE SET
                 "TeamId" = EXCLUDED."TeamId",
