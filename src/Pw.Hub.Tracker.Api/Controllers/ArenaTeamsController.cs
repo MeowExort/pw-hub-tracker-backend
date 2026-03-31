@@ -218,7 +218,12 @@ public class ArenaTeamsController(TrackerDbContext db) : ControllerBase
                         }).ToList()
                 }).ToList(),
                 BattleStats = db.ArenaBattleStats
-                    .Where(s => s.EntityId == t.Id && s.EntityType == EntityType.Team)
+                    .Where(s => s.EntityId == t.Id && s.EntityType == EntityType.Team
+                        && s.Server == (
+                            t.ZoneId == 2 ? "centaur" :
+                            t.ZoneId == 3 ? "alkor" :
+                            t.ZoneId == 5 ? "mizar" :
+                            t.ZoneId == 29 ? "capella" : ""))
                     .Select(s => new
                     {
                         s.MatchPattern,
