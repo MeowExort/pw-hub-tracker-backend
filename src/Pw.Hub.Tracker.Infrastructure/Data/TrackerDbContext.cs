@@ -76,11 +76,13 @@ public class TrackerDbContext(DbContextOptions<TrackerDbContext> options) : DbCo
             e.ToTable("arena_matches");
             e.HasKey(x => x.Id);
             e.Property(x => x.Id).ValueGeneratedNever();
+            e.HasOne(x => x.OriginalMatch).WithMany().HasForeignKey(x => x.OriginalMatchId);
             e.HasOne(x => x.TeamA).WithMany().HasForeignKey(x => x.TeamAId);
             e.HasOne(x => x.TeamB).WithMany().HasForeignKey(x => x.TeamBId);
             e.HasIndex(x => x.TeamAId);
             e.HasIndex(x => x.TeamBId);
             e.HasIndex(x => x.WinnerTeamId);
+            e.HasIndex(x => x.OriginalMatchId).HasFilter("\"OriginalMatchId\" IS NOT NULL");
         });
 
         modelBuilder.Entity<ArenaMatchParticipant>(e =>

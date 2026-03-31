@@ -291,6 +291,14 @@ public class ArenaMessageProcessor(
         }
     }
 
+    private static long GenerateAlternativeMatchId(long originalMatchId, long teamId)
+    {
+        unchecked
+        {
+            return originalMatchId * 31 + teamId;
+        }
+    }
+
     private async Task<List<(long PlayerId, int Cls, int? ScoreBefore, int? ScoreAfter)>> DetectParticipantsAsync(
         NpgsqlConnection connection, NpgsqlTransaction transaction,
         List<ArenaPlayerDto> teamPlayers, int matchPattern, bool isWin, string server)
@@ -322,24 +330,33 @@ public class ArenaMessageProcessor(
     private async Task SaveMatchAsync(NpgsqlConnection connection, NpgsqlTransaction transaction,
         long matchId, long teamId, int matchPattern,
         bool isWin, int scoreBefore, int scoreAfter,
-        List<(long PlayerId, int Cls, int? ScoreBefore, int? ScoreAfter)> participants, string server)
+        List<(long PlayerId, int Cls, int? ScoreBefore, int? ScoreAfter)> participants, string server,
+        long? originalMatchId = null)
     {
         // Проверяем существующий матч
-        var existing = await connection.QueryFirstOrDefaultAsync<(long? TeamAId, long? TeamBId)>("""
-            SELECT "TeamAId", "TeamBId" FROM arena_matches WHERE "Id" = @Id
+        var existing = await connection.QueryFirstOrDefaultAsync<(long? TeamAId, long? TeamBId, long? WinnerTeamId, long? LoserTeamId)>("""
+            SELECT "TeamAId", "TeamBId", "WinnerTeamId", "LoserTeamId" FROM arena_matches WHERE "Id" = @Id
             """, new { Id = matchId }, transaction);
 
         if (existing.TeamAId.HasValue && existing.TeamBId.HasValue)
         {
-            // Обе команды уже записаны
-            if (existing.TeamAId != teamId && existing.TeamBId != teamId)
+            if (existing.TeamAId == teamId || existing.TeamBId == teamId)
+                return; // Повторное сообщение от уже записанной команды — пропускаем
+
+            // Третья+ команда — проверяем конфликт слота
+            var slotConflict = (isWin && existing.WinnerTeamId.HasValue)
+                            || (!isWin && existing.LoserTeamId.HasValue);
+
+            if (slotConflict)
             {
-                logger.LogCritical(
-                    "Match {MatchId}: Third team {TeamId} detected! Existing teams: {TeamA}, {TeamB}. Skipping.",
-                    matchId, teamId, existing.TeamAId, existing.TeamBId);
+                var newMatchId = GenerateAlternativeMatchId(matchId, teamId);
+                await SaveMatchAsync(connection, transaction, newMatchId, teamId,
+                    matchPattern, isWin, scoreBefore, scoreAfter, participants, server,
+                    originalMatchId: originalMatchId ?? matchId);
                 return;
             }
-            // Повторное сообщение от уже записанной команды — пропускаем
+
+            logger.LogWarning("Match {MatchId}: unexpected free slot for team {TeamId}", matchId, teamId);
             return;
         }
 
@@ -348,9 +365,9 @@ public class ArenaMessageProcessor(
             // Первая команда — INSERT
             const string insertSql = """
                 INSERT INTO arena_matches ("Id", "MatchPattern", "TeamAId", "TeamAScoreBefore", "TeamAScoreAfter",
-                    "WinnerTeamId", "LoserTeamId", "CreatedAt")
+                    "WinnerTeamId", "LoserTeamId", "OriginalMatchId", "CreatedAt")
                 VALUES (@Id, @MatchPattern, @TeamId, @ScoreBefore, @ScoreAfter,
-                    @WinnerTeamId, @LoserTeamId, @CreatedAt)
+                    @WinnerTeamId, @LoserTeamId, @OriginalMatchId, @CreatedAt)
                 ON CONFLICT ("Id") DO NOTHING
                 """;
 
@@ -363,12 +380,28 @@ public class ArenaMessageProcessor(
                 ScoreAfter = scoreAfter,
                 WinnerTeamId = isWin ? teamId : (long?)null,
                 LoserTeamId = isWin ? (long?)null : teamId,
+                OriginalMatchId = originalMatchId,
                 CreatedAt = DateTime.UtcNow
             }, transaction);
 
             if (inserted == 0)
             {
-                // Кто-то уже вставил — значит мы вторая команда, обновляем как TeamB
+                // Кто-то уже вставил — перечитываем и проверяем конфликт слота
+                var current = await connection.QueryFirstOrDefaultAsync<(long? WinnerTeamId, long? LoserTeamId)>("""
+                    SELECT "WinnerTeamId", "LoserTeamId" FROM arena_matches WHERE "Id" = @Id
+                    """, new { Id = matchId }, transaction);
+
+                var slotConflict = (isWin && current.WinnerTeamId.HasValue)
+                                || (!isWin && current.LoserTeamId.HasValue);
+                if (slotConflict)
+                {
+                    var newMatchId = GenerateAlternativeMatchId(matchId, teamId);
+                    await SaveMatchAsync(connection, transaction, newMatchId, teamId,
+                        matchPattern, isWin, scoreBefore, scoreAfter, participants, server,
+                        originalMatchId: originalMatchId ?? matchId);
+                    return;
+                }
+
                 await UpdateAsTeamB(connection, transaction, matchId, teamId, scoreBefore, scoreAfter, isWin);
             }
         }
@@ -380,7 +413,18 @@ public class ArenaMessageProcessor(
                 return;
             }
 
-            // Вторая команда — UPDATE
+            // Вторая команда — проверяем конфликт слота перед UPDATE
+            var slotConflict2 = (isWin && existing.WinnerTeamId.HasValue)
+                             || (!isWin && existing.LoserTeamId.HasValue);
+            if (slotConflict2)
+            {
+                var newMatchId = GenerateAlternativeMatchId(matchId, teamId);
+                await SaveMatchAsync(connection, transaction, newMatchId, teamId,
+                    matchPattern, isWin, scoreBefore, scoreAfter, participants, server,
+                    originalMatchId: originalMatchId ?? matchId);
+                return;
+            }
+
             await UpdateAsTeamB(connection, transaction, matchId, teamId, scoreBefore, scoreAfter, isWin);
         }
 

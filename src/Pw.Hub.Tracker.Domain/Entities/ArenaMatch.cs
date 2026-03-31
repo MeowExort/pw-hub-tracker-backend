@@ -12,8 +12,10 @@ public class ArenaMatch
     public int? TeamAScoreAfter { get; set; }
     public int? TeamBScoreBefore { get; set; }
     public int? TeamBScoreAfter { get; set; }
+    public long? OriginalMatchId { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
+    public ArenaMatch? OriginalMatch { get; set; }
     public ArenaTeam? TeamA { get; set; }
     public ArenaTeam? TeamB { get; set; }
     public ICollection<ArenaMatchParticipant> Participants { get; set; } = [];

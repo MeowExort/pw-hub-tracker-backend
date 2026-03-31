@@ -47,6 +47,41 @@ public class ArenaMatchesController(TrackerDbContext db, ILogger<ArenaMatchesCon
         return Ok(match);
     }
 
+    [HttpGet("{matchId:long}/related")]
+    public async Task<IActionResult> GetRelated(long matchId)
+    {
+        // Находим корневой матч (либо сам является оригиналом, либо ссылается на него)
+        var match = await db.ArenaMatches
+            .Where(m => m.Id == matchId)
+            .Select(m => new { RootId = m.OriginalMatchId ?? m.Id })
+            .FirstOrDefaultAsync();
+
+        if (match is null)
+            return NotFound();
+
+        var related = await db.ArenaMatches
+            .Where(m => m.Id == match.RootId || m.OriginalMatchId == match.RootId)
+            .OrderBy(m => m.CreatedAt)
+            .Select(m => new
+            {
+                m.Id,
+                m.MatchPattern,
+                m.TeamAId,
+                m.TeamBId,
+                m.WinnerTeamId,
+                m.LoserTeamId,
+                m.TeamAScoreBefore,
+                m.TeamAScoreAfter,
+                m.TeamBScoreBefore,
+                m.TeamBScoreAfter,
+                m.OriginalMatchId,
+                m.CreatedAt
+            })
+            .ToListAsync();
+
+        return Ok(related);
+    }
+
     [HttpGet]
     public async Task<IActionResult> GetAll(
         [FromQuery] int? matchPattern,
