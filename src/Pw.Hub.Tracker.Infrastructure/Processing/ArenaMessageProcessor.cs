@@ -221,7 +221,7 @@ public class ArenaMessageProcessor(
         const string sql = """
             INSERT INTO arena_players ("Id", "PlayerServer", "TeamId", "RewardMoney", "WeekResetTimestamp", "LastBattleTimestamp", "LastVisiteTimestamp", "UpdatedAt")
             VALUES (@Id, @Server, @TeamId, @RewardMoney, @WeekResetTimestamp, @LastBattleTimestamp, @LastVisiteTimestamp, @UpdatedAt)
-            ON CONFLICT ("Id", "Server") DO UPDATE SET
+            ON CONFLICT ("Id", "PlayerServer") DO UPDATE SET
                 "TeamId" = EXCLUDED."TeamId",
                 "RewardMoney" = EXCLUDED."RewardMoney",
                 "WeekResetTimestamp" = EXCLUDED."WeekResetTimestamp",
