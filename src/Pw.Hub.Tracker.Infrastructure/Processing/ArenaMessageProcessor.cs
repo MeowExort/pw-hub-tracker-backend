@@ -68,7 +68,7 @@ public class ArenaMessageProcessor(
                     if (prevTeam is not null && battleInfo.BattleCount > prevTeam.BattleCount)
                     {
                         var isWin = battleInfo.WinCount > prevTeam.WinCount;
-                        var participants = await DetectParticipantsAsync(connection, transaction, teamPlayers, battleInfo.MatchPattern, isWin);
+                        var participants = await DetectParticipantsAsync(connection, transaction, teamPlayers, battleInfo.MatchPattern, isWin, GetServer(teamDto.ZoneId));
 
                         if (battleTimestamp > 0)
                         {
@@ -293,7 +293,7 @@ public class ArenaMessageProcessor(
 
     private async Task<List<(long PlayerId, int Cls, int? ScoreBefore, int? ScoreAfter)>> DetectParticipantsAsync(
         NpgsqlConnection connection, NpgsqlTransaction transaction,
-        List<ArenaPlayerDto> teamPlayers, int matchPattern, bool isWin)
+        List<ArenaPlayerDto> teamPlayers, int matchPattern, bool isWin, string server)
     {
         var participants = new List<(long, int, int?, int?)>();
 
@@ -305,8 +305,8 @@ public class ArenaMessageProcessor(
             var prev = await cache.GetPlayerSnapshotAsync(player.Id, matchPattern);
             if (prev is null)
             {
-                var dbStats = await connection.QueryFirstOrDefaultAsync<(int Score, int BattleCount, int WinCount)?>("SELECT \"Score\", \"BattleCount\", \"WinCount\" FROM arena_battle_stats WHERE \"EntityId\" = @EntityId AND \"EntityType\" = @EntityType AND \"MatchPattern\" = @MatchPattern",
-                    new { EntityId = player.Id, EntityType = (short)EntityType.Player, MatchPattern = matchPattern }, transaction);
+                var dbStats = await connection.QueryFirstOrDefaultAsync<(int Score, int BattleCount, int WinCount)?>("SELECT \"Score\", \"BattleCount\", \"WinCount\" FROM arena_battle_stats WHERE \"EntityId\" = @EntityId AND \"Server\" = @Server AND \"EntityType\" = @EntityType AND \"MatchPattern\" = @MatchPattern",
+                    new { EntityId = player.Id, Server = server, EntityType = (short)EntityType.Player, MatchPattern = matchPattern }, transaction);
                 if (dbStats.HasValue)
                     prev = new BattleSnapshot(dbStats.Value.Score, dbStats.Value.BattleCount, dbStats.Value.WinCount);
             }
@@ -388,7 +388,7 @@ public class ArenaMessageProcessor(
         const string participantSql = """
             INSERT INTO arena_match_participants ("MatchId", "TeamId", "PlayerId", "PlayerServer", "PlayerCls", "ScoreBefore", "ScoreAfter", "IsWinner")
             VALUES (@MatchId, @TeamId, @PlayerId, @PlayerServer, @PlayerCls, @ScoreBefore, @ScoreAfter, @IsWinner)
-            ON CONFLICT ("MatchId", "PlayerId", "PlayerServer") DO UPDATE SET
+            ON CONFLICT ("MatchId", "PlayerId") DO UPDATE SET
                 "ScoreBefore" = EXCLUDED."ScoreBefore",
                 "ScoreAfter" = EXCLUDED."ScoreAfter",
                 "IsWinner" = EXCLUDED."IsWinner"
