@@ -233,6 +233,7 @@ public class ArenaMessageProcessor(
         await connection.ExecuteAsync(sql, new
         {
             dto.Id,
+            server,
             dto.TeamId,
             dto.RewardMoney,
             dto.WeekResetTimestamp,
