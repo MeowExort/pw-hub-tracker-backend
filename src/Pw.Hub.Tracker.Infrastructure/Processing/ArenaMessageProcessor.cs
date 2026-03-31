@@ -57,13 +57,13 @@ public class ArenaMessageProcessor(
 
                     if (prevTeam is null)
                     {
-                        var dbStats = await connection.QueryFirstOrDefaultAsync<(int Score, int BattleCount, int WinCount)?>("SELECT \"Score\", \"BattleCount\", \"WinCount\" FROM arena_battle_stats WHERE \"EntityId\" = @EntityId AND \"EntityType\" = @EntityType AND \"MatchPattern\" = @MatchPattern",
-                            new { EntityId = teamDto.Id, EntityType = (short)EntityType.Team, battleInfo.MatchPattern }, transaction);
+                        var dbStats = await connection.QueryFirstOrDefaultAsync<(int Score, int BattleCount, int WinCount)?>("SELECT \"Score\", \"BattleCount\", \"WinCount\" FROM arena_battle_stats WHERE \"EntityId\" = @EntityId AND \"Server\" = @Server AND \"EntityType\" = @EntityType AND \"MatchPattern\" = @MatchPattern",
+                            new { EntityId = teamDto.Id, Server = GetServer(teamDto.ZoneId), EntityType = (short)EntityType.Team, battleInfo.MatchPattern }, transaction);
                         if (dbStats.HasValue)
                             prevTeam = new BattleSnapshot(dbStats.Value.Score, dbStats.Value.BattleCount, dbStats.Value.WinCount);
                     }
 
-                    await UpsertBattleStatsAsync(connection, transaction, teamDto.Id, EntityType.Team, battleInfo);
+                    await UpsertBattleStatsAsync(connection, transaction, teamDto.Id, EntityType.Team, battleInfo, GetServer(teamDto.ZoneId));
 
                     if (prevTeam is not null && battleInfo.BattleCount > prevTeam.BattleCount)
                     {
@@ -96,13 +96,13 @@ public class ArenaMessageProcessor(
 
                         if (prevPlayer is null)
                         {
-                            var dbStats = await connection.QueryFirstOrDefaultAsync<(int Score, int BattleCount, int WinCount)?>("SELECT \"Score\", \"BattleCount\", \"WinCount\" FROM arena_battle_stats WHERE \"EntityId\" = @EntityId AND \"EntityType\" = @EntityType AND \"MatchPattern\" = @MatchPattern",
-                                new { EntityId = playerDto.Id, EntityType = (short)EntityType.Player, battleInfo.MatchPattern }, transaction);
+                            var dbStats = await connection.QueryFirstOrDefaultAsync<(int Score, int BattleCount, int WinCount)?>("SELECT \"Score\", \"BattleCount\", \"WinCount\" FROM arena_battle_stats WHERE \"EntityId\" = @EntityId AND \"Server\" = @Server AND \"EntityType\" = @EntityType AND \"MatchPattern\" = @MatchPattern",
+                                new { EntityId = playerDto.Id, Server = GetServer(teamDto.ZoneId), EntityType = (short)EntityType.Player, battleInfo.MatchPattern }, transaction);
                             if (dbStats.HasValue)
                                 prevPlayer = new BattleSnapshot(dbStats.Value.Score, dbStats.Value.BattleCount, dbStats.Value.WinCount);
                         }
 
-                        await UpsertBattleStatsAsync(connection, transaction, playerDto.Id, EntityType.Player, battleInfo);
+                        await UpsertBattleStatsAsync(connection, transaction, playerDto.Id, EntityType.Player, battleInfo, GetServer(teamDto.ZoneId));
 
                         if (prevPlayer is null || battleInfo.Score != prevPlayer.Score
                                                || battleInfo.BattleCount != prevPlayer.BattleCount)
@@ -245,12 +245,12 @@ public class ArenaMessageProcessor(
     }
 
     private static async Task UpsertBattleStatsAsync(NpgsqlConnection connection, NpgsqlTransaction transaction,
-        long entityId, EntityType entityType, ArenaBattleInfoDto dto)
+        long entityId, EntityType entityType, ArenaBattleInfoDto dto, string server)
     {
         const string sql = """
-            INSERT INTO arena_battle_stats ("EntityId", "EntityType", "MatchPattern", "Score", "WinCount", "BattleCount", "WeekBattleCount", "WeekWinCount", "WeekMaxScore", "Rank", "ArenaTeamId", "ArenaPlayerId")
-            VALUES (@EntityId, @EntityType, @MatchPattern, @Score, @WinCount, @BattleCount, @WeekBattleCount, @WeekWinCount, @WeekMaxScore, @Rank, @ArenaTeamId, @ArenaPlayerId)
-            ON CONFLICT ("EntityId", "EntityType", "MatchPattern") DO UPDATE SET
+            INSERT INTO arena_battle_stats ("EntityId", "Server", "EntityType", "MatchPattern", "Score", "WinCount", "BattleCount", "WeekBattleCount", "WeekWinCount", "WeekMaxScore", "Rank", "ArenaTeamId", "ArenaPlayerId")
+            VALUES (@EntityId, @Server, @EntityType, @MatchPattern, @Score, @WinCount, @BattleCount, @WeekBattleCount, @WeekWinCount, @WeekMaxScore, @Rank, @ArenaTeamId, @ArenaPlayerId)
+            ON CONFLICT ("EntityId", "Server", "EntityType", "MatchPattern") DO UPDATE SET
                 "Score" = EXCLUDED."Score",
                 "WinCount" = EXCLUDED."WinCount",
                 "BattleCount" = EXCLUDED."BattleCount",
@@ -265,6 +265,7 @@ public class ArenaMessageProcessor(
         await connection.ExecuteAsync(sql, new
         {
             EntityId = entityId,
+            Server = server,
             EntityType = (short)entityType,
             dto.MatchPattern,
             dto.Score,
