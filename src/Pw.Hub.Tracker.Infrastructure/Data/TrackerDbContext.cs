@@ -37,7 +37,7 @@ public class TrackerDbContext(DbContextOptions<TrackerDbContext> options) : DbCo
         modelBuilder.Entity<Player>(e =>
         {
             e.ToTable("players");
-            e.HasKey(x => x.Id);
+            e.HasKey(x => new { x.Id, x.Server });
             e.Property(x => x.Id).ValueGeneratedNever();
         });
 
@@ -47,7 +47,10 @@ public class TrackerDbContext(DbContextOptions<TrackerDbContext> options) : DbCo
             e.HasKey(x => x.Id);
             e.Property(x => x.Id).ValueGeneratedNever();
             e.HasOne(x => x.Team).WithMany().HasForeignKey(x => x.TeamId);
-            e.HasOne(x => x.Player).WithMany().HasForeignKey(x => x.Id);
+            e.HasOne(ap => ap.Player)
+                .WithMany()
+                .HasForeignKey(ap => new { ap.Id, ap.PlayerServer })
+                .HasPrincipalKey(p => new { p.Id, p.Server });
         });
 
         modelBuilder.Entity<ArenaBattleStats>(e =>
@@ -91,7 +94,7 @@ public class TrackerDbContext(DbContextOptions<TrackerDbContext> options) : DbCo
         modelBuilder.Entity<PlayerProperty>(e =>
         {
             e.ToTable("player_properties");
-            e.HasKey(x => x.PlayerId);
+            e.HasKey(x => new {x.PlayerId, x.Server});
             e.Property(x => x.PlayerId).ValueGeneratedNever();
         });
 
@@ -100,6 +103,7 @@ public class TrackerDbContext(DbContextOptions<TrackerDbContext> options) : DbCo
             e.ToTable("player_property_history");
             e.HasKey(x => x.Id);
             e.Property(x => x.Id).UseIdentityAlwaysColumn();
+            e.HasIndex(x=>  new { x.PlayerId, x.Server });
             e.HasIndex(x => new { x.PlayerId, x.RecordedAt });
         });
     }

@@ -14,9 +14,9 @@ public class PlayerBaseBriefProcessor(
         await using var connection = await dataSource.OpenConnectionAsync();
 
         const string sql = """
-            INSERT INTO players ("Id", "Name", "Cls", "Gender", "UpdatedAt")
-            VALUES (@RoleId, @Name, @Cls, @Gender, @UpdatedAt)
-            ON CONFLICT ("Id") DO UPDATE
+            INSERT INTO players ("Id", "Name", "Cls", "Gender", "Server", "UpdatedAt")
+            VALUES (@RoleId, @Name, @Cls, @Gender, @Server, @UpdatedAt)
+            ON CONFLICT ("Id", "Server") DO UPDATE
             SET "Name" = @Name, "Cls" = @Cls, "Gender" = @Gender, "UpdatedAt" = @UpdatedAt
             """;
 

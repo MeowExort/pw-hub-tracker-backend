@@ -10,6 +10,8 @@ public class ArenaPlayer
     public long LastVisiteTimestamp { get; set; }
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
     public ArenaTeam Team { get; set; } = null!;
+    
+    public string PlayerServer { get; set; }
     public Player Player { get; set; } = null!;
     public ICollection<ArenaBattleStats> BattleStats { get; set; } = [];
 }
