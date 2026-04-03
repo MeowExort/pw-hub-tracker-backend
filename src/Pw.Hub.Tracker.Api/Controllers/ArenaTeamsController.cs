@@ -450,7 +450,7 @@ public class ArenaTeamsController(TrackerDbContext db) : ControllerBase
     }
 
     [HttpGet("{teamId:long}/h2h/{opponentTeamId:long}")]
-    public async Task<IActionResult> GetH2H(long teamId, long opponentTeamId)
+    public async Task<IActionResult> GetH2H(long teamId, long opponentTeamId, [FromQuery] long? playerId = null)
     {
         var teams = await db.ArenaTeams
             .Where(t => t.Id == teamId || t.Id == opponentTeamId)
@@ -463,9 +463,16 @@ public class ArenaTeamsController(TrackerDbContext db) : ControllerBase
         if (team == null || opponent == null)
             return NotFound("One or both teams not found.");
 
-        var matches = await db.ArenaMatches
+        var query = db.ArenaMatches
             .Where(m => (m.TeamAId == teamId && m.TeamBId == opponentTeamId)
-                     || (m.TeamAId == opponentTeamId && m.TeamBId == teamId))
+                     || (m.TeamAId == opponentTeamId && m.TeamBId == teamId));
+
+        if (playerId.HasValue)
+        {
+            query = query.Where(m => m.Participants.Any(p => p.PlayerId == playerId.Value));
+        }
+
+        var matches = await query
             .OrderByDescending(m => m.CreatedAt)
             .Select(m => new
             {
