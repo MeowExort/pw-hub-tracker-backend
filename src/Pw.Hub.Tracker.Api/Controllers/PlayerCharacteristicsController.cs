@@ -10,9 +10,38 @@ public class PlayerCharacteristicsController(TrackerDbContext db) : ControllerBa
     [HttpGet("{server}/{playerId:long}/card")]
     public async Task<IActionResult> GetPlayerCard(string server, long playerId)
     {
-        var props = await db.PlayerProperties
-            .Where(p => p.PlayerId == playerId && p.Server == server)
+        var props = await db.PlayerPropertyHistory
+            .Where(pp => pp.PlayerId == playerId && pp.Server == server)
+            .GroupBy(pp => new { pp.PlayerId, pp.Server })
+            .Select(g => new
+            {
+                Hp = g.Max(x => x.Hp),
+                Mp = g.Max(x => x.Mp),
+                DamageLow = g.Max(x => x.DamageLow),
+                DamageHigh = g.Max(x => x.DamageHigh),
+                DamageMagicLow = g.Max(x => x.DamageMagicLow),
+                DamageMagicHigh = g.Max(x => x.DamageMagicHigh),
+                Defense = g.Max(x => x.Defense),
+                Resistance = g.OrderByDescending(x => x.RecordedAt).Select(x => x.Resistance).FirstOrDefault(),
+                Attack = g.Max(x => x.Attack),
+                Armor = g.Max(x => x.Armor),
+                AttackSpeed = g.Max(x => x.AttackSpeed),
+                RunSpeed = g.Max(x => x.RunSpeed),
+                AttackDegree = g.Max(x => x.AttackDegree),
+                DefendDegree = g.Max(x => x.DefendDegree),
+                CritRate = g.Max(x => x.CritRate),
+                DamageReduce = g.Max(x => x.DamageReduce),
+                Prayspeed = g.Max(x => x.Prayspeed),
+                CritDamageBonus = g.Max(x => x.CritDamageBonus),
+                InvisibleDegree = g.Max(x => x.InvisibleDegree),
+                AntiInvisibleDegree = g.Max(x => x.AntiInvisibleDegree),
+                Vigour = g.Max(x => x.Vigour),
+                AntiDefenseDegree = g.Max(x => x.AntiDefenseDegree),
+                AntiResistanceDegree = g.Max(x => x.AntiResistanceDegree),
+                PeakGrade = g.Max(x => x.PeakGrade)
+            })
             .FirstOrDefaultAsync();
+
         if (props is null)
             return NotFound();
         var player = await db.Players
@@ -76,47 +105,66 @@ public class PlayerCharacteristicsController(TrackerDbContext db) : ControllerBa
         [FromQuery] string player2Server,
         [FromQuery] long player2Id)
     {
-        var props = await db.PlayerProperties
-            .Where(p =>
-                (p.PlayerId == player1Id && p.Server == player1Server) ||
-                (p.PlayerId == player2Id && p.Server == player2Server))
-            .Join(db.Players,
-                pp => new { Id = pp.PlayerId, pp.Server },
-                pl => new { pl.Id, pl.Server },
-                (pp, pl) => new
+        var playersToFetch = new[]
+        {
+            new { Id = player1Id, Server = player1Server },
+            new { Id = player2Id, Server = player2Server }
+        };
+
+        var results = new List<object>();
+
+        foreach (var pReq in playersToFetch)
+        {
+            var pInfo = await db.Players
+                .Where(p => p.Id == pReq.Id && p.Server == pReq.Server)
+                .Select(p => new { p.Name, p.Cls })
+                .FirstOrDefaultAsync();
+
+            if (pInfo == null) continue;
+
+            var maxProps = await db.PlayerPropertyHistory
+                .Where(pp => pp.PlayerId == pReq.Id && pp.Server == pReq.Server)
+                .GroupBy(pp => new { pp.PlayerId, pp.Server })
+                .Select(g => new
                 {
-                    pp.PlayerId,
-                    pp.Server,
-                    pl.Name,
-                    pl.Cls,
-                    pp.Hp,
-                    pp.Mp,
-                    pp.DamageLow,
-                    pp.DamageHigh,
-                    pp.DamageMagicLow,
-                    pp.DamageMagicHigh,
-                    pp.Defense,
-                    pp.Attack,
-                    pp.Armor,
-                    pp.AttackSpeed,
-                    pp.RunSpeed,
-                    pp.AttackDegree,
-                    pp.DefendDegree,
-                    pp.CritRate,
-                    pp.DamageReduce,
-                    pp.Prayspeed,
-                    pp.CritDamageBonus,
-                    pp.InvisibleDegree,
-                    pp.AntiInvisibleDegree,
-                    pp.Vigour,
-                    pp.AntiDefenseDegree,
-                    pp.AntiResistanceDegree,
-                    pp.PeakGrade
+                    PlayerId = g.Key.PlayerId,
+                    Server = g.Key.Server,
+                    pInfo.Name,
+                    pInfo.Cls,
+                    Hp = g.Max(x => x.Hp),
+                    Mp = g.Max(x => x.Mp),
+                    DamageLow = g.Max(x => x.DamageLow),
+                    DamageHigh = g.Max(x => x.DamageHigh),
+                    DamageMagicLow = g.Max(x => x.DamageMagicLow),
+                    DamageMagicHigh = g.Max(x => x.DamageMagicHigh),
+                    Defense = g.Max(x => x.Defense),
+                    Attack = g.Max(x => x.Attack),
+                    Armor = g.Max(x => x.Armor),
+                    AttackSpeed = g.Max(x => x.AttackSpeed),
+                    RunSpeed = g.Max(x => x.RunSpeed),
+                    AttackDegree = g.Max(x => x.AttackDegree),
+                    DefendDegree = g.Max(x => x.DefendDegree),
+                    CritRate = g.Max(x => x.CritRate),
+                    DamageReduce = g.Max(x => x.DamageReduce),
+                    Prayspeed = g.Max(x => x.Prayspeed),
+                    CritDamageBonus = g.Max(x => x.CritDamageBonus),
+                    InvisibleDegree = g.Max(x => x.InvisibleDegree),
+                    AntiInvisibleDegree = g.Max(x => x.AntiInvisibleDegree),
+                    Vigour = g.Max(x => x.Vigour),
+                    AntiDefenseDegree = g.Max(x => x.AntiDefenseDegree),
+                    AntiResistanceDegree = g.Max(x => x.AntiResistanceDegree),
+                    PeakGrade = g.Max(x => x.PeakGrade)
                 })
-            .ToListAsync();
-        if (props.Count < 2)
+                .FirstOrDefaultAsync();
+
+            if (maxProps != null)
+                results.Add(maxProps);
+        }
+
+        if (results.Count < 2)
             return NotFound("One or both players not found");
-        return Ok(props);
+
+        return Ok(results);
     }
     [HttpGet("{server}/{playerId:long}/property-history")]
     public async Task<IActionResult> GetPropertyHistory(
