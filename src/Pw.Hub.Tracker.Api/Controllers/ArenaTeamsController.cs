@@ -183,8 +183,10 @@ public class ArenaTeamsController(TrackerDbContext db) : ControllerBase
     }
 
     [HttpGet("{teamId:long}")]
-    public async Task<IActionResult> GetById(long teamId)
+    public async Task<IActionResult> GetById(long teamId, [FromQuery] string? include = null)
     {
+        var includeList = (include ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries).Select(x => x.Trim().ToLowerInvariant()).ToList();
+
         var team = await db.ArenaTeams
             .Where(t => t.Id == teamId)
             .Select(t => new
@@ -241,7 +243,37 @@ public class ArenaTeamsController(TrackerDbContext db) : ControllerBase
         if (team is null)
             return NotFound();
 
-        return Ok(team);
+        object? scoreHistory = null;
+        if (includeList.Contains("scorehistory"))
+        {
+            scoreHistory = await db.ArenaScoreHistory
+                .Where(h => h.EntityId == teamId && h.EntityType == EntityType.Team)
+                .OrderByDescending(h => h.RecordedAt)
+                .Take(200)
+                .Select(h => new
+                {
+                    h.MatchPattern,
+                    h.Score,
+                    h.WinCount,
+                    h.BattleCount,
+                    h.RecordedAt
+                })
+                .ToListAsync();
+        }
+
+        return Ok(new
+        {
+            team.Id,
+            team.CaptainId,
+            team.ZoneId,
+            team.Name,
+            team.WeekResetTimestamp,
+            team.LastVisiteTimestamp,
+            team.UpdatedAt,
+            team.Members,
+            team.BattleStats,
+            ScoreHistory = scoreHistory
+        });
     }
 
     [HttpGet("{teamId:long}/members")]
@@ -307,7 +339,9 @@ public class ArenaTeamsController(TrackerDbContext db) : ControllerBase
                 m.Id,
                 m.MatchPattern,
                 m.TeamAId,
+                TeamAName = m.TeamA.Name,
                 m.TeamBId,
+                TeamBName = m.TeamB.Name,
                 m.WinnerTeamId,
                 m.LoserTeamId,
                 m.TeamAScoreBefore,
