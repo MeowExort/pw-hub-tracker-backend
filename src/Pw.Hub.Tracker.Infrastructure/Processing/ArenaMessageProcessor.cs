@@ -77,11 +77,11 @@ public class ArenaMessageProcessor(
                                 battleInfo.MatchPattern, isWin, prevTeam.Score, battleInfo.Score, participants, GetServer(teamDto.ZoneId));
                         }
 
-                        await RecordScoreHistoryAsync(connection, transaction, teamDto.Id, EntityType.Team, battleInfo, teamDto.Members.Count);
+                        await RecordScoreHistoryAsync(connection, transaction, teamDto.Id, EntityType.Team, GetServer(teamDto.ZoneId), battleInfo, teamDto.Members.Count);
                     }
                     else if (prevTeam is null || battleInfo.Score != prevTeam.Score)
                     {
-                        await RecordScoreHistoryAsync(connection, transaction, teamDto.Id, EntityType.Team, battleInfo, teamDto.Members.Count);
+                        await RecordScoreHistoryAsync(connection, transaction, teamDto.Id, EntityType.Team, GetServer(teamDto.ZoneId), battleInfo, teamDto.Members.Count);
                     }
 
                     await cache.SetTeamSnapshotAsync(teamDto.Id, battleInfo.MatchPattern,
@@ -107,7 +107,7 @@ public class ArenaMessageProcessor(
                         if (prevPlayer is null || battleInfo.Score != prevPlayer.Score
                                                || battleInfo.BattleCount != prevPlayer.BattleCount)
                         {
-                            await RecordScoreHistoryAsync(connection, transaction, playerDto.Id, EntityType.Player, battleInfo);
+                            await RecordScoreHistoryAsync(connection, transaction, playerDto.Id, EntityType.Player, GetServer(teamDto.ZoneId), battleInfo);
                         }
 
                         await cache.SetPlayerSnapshotAsync(playerDto.Id, battleInfo.MatchPattern,
@@ -509,17 +509,18 @@ public class ArenaMessageProcessor(
     }
 
     private static async Task RecordScoreHistoryAsync(NpgsqlConnection connection, NpgsqlTransaction transaction,
-        long entityId, EntityType entityType, ArenaBattleInfoDto dto, int? memberCount = null)
+        long entityId, EntityType entityType, string server, ArenaBattleInfoDto dto, int? memberCount = null)
     {
         const string sql = """
-            INSERT INTO arena_score_history ("EntityId", "EntityType", "MatchPattern", "Score", "WinCount", "BattleCount", "MemberCount", "RecordedAt")
-            VALUES (@EntityId, @EntityType, @MatchPattern, @Score, @WinCount, @BattleCount, @MemberCount, @RecordedAt)
+            INSERT INTO arena_score_history ("EntityId", "EntityType", "Server", "MatchPattern", "Score", "WinCount", "BattleCount", "MemberCount", "RecordedAt")
+            VALUES (@EntityId, @EntityType, @Server, @MatchPattern, @Score, @WinCount, @BattleCount, @MemberCount, @RecordedAt)
             """;
 
         await connection.ExecuteAsync(sql, new
         {
             EntityId = entityId,
             EntityType = (short)entityType,
+            server,
             dto.MatchPattern,
             dto.Score,
             dto.WinCount,
