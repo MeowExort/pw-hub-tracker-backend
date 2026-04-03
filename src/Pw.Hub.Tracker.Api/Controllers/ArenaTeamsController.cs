@@ -53,6 +53,7 @@ public class ArenaTeamsController(TrackerDbContext db) : ControllerBase
         var includeList = (include ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries)
             .Select(x => x.Trim().ToLowerInvariant()).ToList();
         bool includeBattleStats = includeList.Contains("battlestats");
+        bool includeMembers = includeList.Contains("members");
 
         var query = db.ArenaTeams
             .Where(t => t.Name != null)
@@ -103,6 +104,12 @@ public class ArenaTeamsController(TrackerDbContext db) : ControllerBase
                     s.WeekWinCount,
                     s.WeekMaxScore,
                     s.Rank
+                }).ToList() : null,
+                Members = includeMembers ? t.Members.Select(m => new
+                {
+                    m.PlayerId,
+                    Cls = m.Player.Player.Cls,
+                    Name = m.Player.Player.Name
                 }).ToList() : null
             })
             .ToListAsync();
@@ -123,6 +130,7 @@ public class ArenaTeamsController(TrackerDbContext db) : ControllerBase
         var includeList = (include ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries)
             .Select(x => x.Trim().ToLowerInvariant()).ToList();
         bool includeBattleStats = includeList.Contains("battlestats");
+        bool includeMembers = includeList.Contains("members");
 
         var query = db.ArenaTeams.AsQueryable();
 
@@ -176,6 +184,12 @@ public class ArenaTeamsController(TrackerDbContext db) : ControllerBase
                         s.WeekWinCount,
                         s.WeekMaxScore,
                         s.Rank
+                    }).ToList() : null,
+                    Members = includeMembers ? t.Members.Select(m => new
+                    {
+                        m.PlayerId,
+                        Cls = m.Player.Player.Cls,
+                        Name = m.Player.Player.Name
                     }).ToList() : null
                 })
                 .OrderByDescending(t => t.RealRating)
@@ -216,6 +230,12 @@ public class ArenaTeamsController(TrackerDbContext db) : ControllerBase
                         s.WeekWinCount,
                         s.WeekMaxScore,
                         s.Rank
+                    }).ToList() : null,
+                    Members = includeMembers ? t.Members.Select(m => new
+                    {
+                        m.PlayerId,
+                        Cls = m.Player.Player.Cls,
+                        Name = m.Player.Player.Name
                     }).ToList() : null
                 });
         }
