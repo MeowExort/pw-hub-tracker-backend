@@ -39,6 +39,7 @@ public class ArenaTeamsController(TrackerDbContext db) : ControllerBase
     public async Task<IActionResult> Search(
         [FromQuery] string name,
         [FromQuery] int? zoneId,
+        [FromQuery] string? include = null,
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20)
     {
@@ -48,6 +49,10 @@ public class ArenaTeamsController(TrackerDbContext db) : ControllerBase
         pageSize = Math.Clamp(pageSize, 1, 100);
         var trimmed = name.Trim();
         var alternate = NormalizeLayout(trimmed);
+
+        var includeList = (include ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries)
+            .Select(x => x.Trim().ToLowerInvariant()).ToList();
+        bool includeBattleStats = includeList.Contains("battlestats");
 
         var query = db.ArenaTeams
             .Where(t => t.Name != null)
@@ -87,7 +92,18 @@ public class ArenaTeamsController(TrackerDbContext db) : ControllerBase
                 RatingOrder = t.BattleStats
                     .Where(s => s.MatchPattern == 0)
                     .Select(s => t.Members.Count > 0 ? (double)s.Score / t.Members.Count : 0)
-                    .FirstOrDefault()
+                    .FirstOrDefault(),
+                BattleStats = includeBattleStats ? t.BattleStats.Select(s => new
+                {
+                    s.MatchPattern,
+                    s.Score,
+                    s.WinCount,
+                    s.BattleCount,
+                    s.WeekBattleCount,
+                    s.WeekWinCount,
+                    s.WeekMaxScore,
+                    s.Rank
+                }).ToList() : null
             })
             .ToListAsync();
 
@@ -98,10 +114,15 @@ public class ArenaTeamsController(TrackerDbContext db) : ControllerBase
     public async Task<IActionResult> GetAll(
         [FromQuery] int? zoneId,
         [FromQuery] string? sortBy,
+        [FromQuery] string? include = null,
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20)
     {
         pageSize = Math.Clamp(pageSize, 1, 100);
+
+        var includeList = (include ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries)
+            .Select(x => x.Trim().ToLowerInvariant()).ToList();
+        bool includeBattleStats = includeList.Contains("battlestats");
 
         var query = db.ArenaTeams.AsQueryable();
 
@@ -144,7 +165,18 @@ public class ArenaTeamsController(TrackerDbContext db) : ControllerBase
                     RealRating = t.BattleStats
                         .Where(s => s.MatchPattern == mp)
                         .Select(s => t.Members.Count > 0 ? (double)s.Score / t.Members.Count : 0)
-                        .FirstOrDefault()
+                        .FirstOrDefault(),
+                    BattleStats = includeBattleStats ? t.BattleStats.Select(s => new
+                    {
+                        s.MatchPattern,
+                        s.Score,
+                        s.WinCount,
+                        s.BattleCount,
+                        s.WeekBattleCount,
+                        s.WeekWinCount,
+                        s.WeekMaxScore,
+                        s.Rank
+                    }).ToList() : null
                 })
                 .OrderByDescending(t => t.RealRating)
                 .Skip((page - 1) * pageSize)
@@ -173,7 +205,18 @@ public class ArenaTeamsController(TrackerDbContext db) : ControllerBase
                     RatingOrder = t.BattleStats
                         .Where(s => s.MatchPattern == 0)
                         .Select(s => t.Members.Count > 0 ? (double)s.Score / t.Members.Count : 0)
-                        .FirstOrDefault()
+                        .FirstOrDefault(),
+                    BattleStats = includeBattleStats ? t.BattleStats.Select(s => new
+                    {
+                        s.MatchPattern,
+                        s.Score,
+                        s.WinCount,
+                        s.BattleCount,
+                        s.WeekBattleCount,
+                        s.WeekWinCount,
+                        s.WeekMaxScore,
+                        s.Rank
+                    }).ToList() : null
                 });
         }
 
