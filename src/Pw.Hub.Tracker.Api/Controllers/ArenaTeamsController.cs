@@ -448,4 +448,96 @@ public class ArenaTeamsController(TrackerDbContext db) : ControllerBase
 
         return Ok(history);
     }
+
+    [HttpGet("{teamId:long}/h2h/{opponentTeamId:long}")]
+    public async Task<IActionResult> GetH2H(long teamId, long opponentTeamId)
+    {
+        var teams = await db.ArenaTeams
+            .Where(t => t.Id == teamId || t.Id == opponentTeamId)
+            .Select(t => new { t.Id, t.Name })
+            .ToListAsync();
+
+        var team = teams.FirstOrDefault(t => t.Id == teamId);
+        var opponent = teams.FirstOrDefault(t => t.Id == opponentTeamId);
+
+        if (team == null || opponent == null)
+            return NotFound("One or both teams not found.");
+
+        var matches = await db.ArenaMatches
+            .Where(m => (m.TeamAId == teamId && m.TeamBId == opponentTeamId)
+                     || (m.TeamAId == opponentTeamId && m.TeamBId == teamId))
+            .OrderByDescending(m => m.CreatedAt)
+            .Select(m => new
+            {
+                m.Id,
+                m.MatchPattern,
+                m.WinnerTeamId,
+                m.TeamAId,
+                m.TeamBId,
+                m.TeamAScoreBefore,
+                m.TeamAScoreAfter,
+                m.TeamBScoreBefore,
+                m.TeamBScoreAfter,
+                m.CreatedAt
+            })
+            .ToListAsync();
+
+        var h2hMatches = matches.Select(m =>
+        {
+            var isTeamA = m.TeamAId == teamId;
+            return new
+            {
+                MatchId = m.Id,
+                m.MatchPattern,
+                IsWin = m.WinnerTeamId == teamId,
+                TeamScoreBefore = isTeamA ? m.TeamAScoreBefore : m.TeamBScoreBefore,
+                TeamScoreAfter = isTeamA ? m.TeamAScoreAfter : m.TeamBScoreAfter,
+                OpponentScoreBefore = isTeamA ? m.TeamBScoreBefore : m.TeamAScoreBefore,
+                OpponentScoreAfter = isTeamA ? m.TeamBScoreAfter : m.TeamAScoreAfter,
+                m.CreatedAt
+            };
+        }).ToList();
+
+        var overallMatches = h2hMatches.Count;
+        var overallWins = h2hMatches.Count(m => m.IsWin);
+        var overallLosses = overallMatches - overallWins;
+
+        var byMatchPattern = h2hMatches
+            .GroupBy(m => m.MatchPattern)
+            .Select(g =>
+            {
+                var patternMatches = g.Count();
+                var patternWins = g.Count(m => m.IsWin);
+                return new
+                {
+                    MatchPattern = g.Key,
+                    TotalMatches = patternMatches,
+                    Wins = patternWins,
+                    Losses = patternMatches - patternWins,
+                    WinRate = patternMatches > 0 ? Math.Round((double)patternWins / patternMatches * 100, 1) : 0,
+                    AvgScoreChange = patternMatches > 0 ? Math.Round(g.Average(m => (double)(m.TeamScoreAfter - m.TeamScoreBefore)), 1) : 0,
+                    LastMatchAt = g.Max(m => m.CreatedAt)
+                };
+            })
+            .OrderBy(x => x.MatchPattern)
+            .ToList();
+
+        return Ok(new
+        {
+            teamId,
+            opponentTeamId,
+            team = new { team.Id, team.Name },
+            opponent = new { opponent.Id, opponent.Name },
+            overall = new
+            {
+                TotalMatches = overallMatches,
+                Wins = overallWins,
+                Losses = overallLosses,
+                WinRate = overallMatches > 0 ? Math.Round((double)overallWins / overallMatches * 100, 1) : 0,
+                LastMatchAt = h2hMatches.FirstOrDefault()?.CreatedAt
+            },
+            ByMatchPattern = byMatchPattern,
+            RecentMatches = h2hMatches.Take(20).ToList()
+        });
+    }
 }
