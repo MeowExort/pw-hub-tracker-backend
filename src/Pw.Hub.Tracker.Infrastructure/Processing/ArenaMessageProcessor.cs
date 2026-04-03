@@ -333,66 +333,65 @@ public class ArenaMessageProcessor(
         List<(long PlayerId, int Cls, int? ScoreBefore, int? ScoreAfter)> participants, string server,
         long? originalMatchId = null)
     {
-        // Проверяем существующий матч
-        var existing = await connection.QueryFirstOrDefaultAsync<(long? TeamAId, long? TeamBId, long? WinnerTeamId, long? LoserTeamId)>("""
-            SELECT "TeamAId", "TeamBId", "WinnerTeamId", "LoserTeamId" FROM arena_matches WHERE "Id" = @Id
-            """, new { Id = matchId }, transaction);
+        // 1. Пытаемся найти существующий матч, где слот для нашего результата еще свободен
+        // Ищем либо по точному ID, либо по OriginalMatchId
+        var candidate = await connection.QueryFirstOrDefaultAsync<(long Id, long? TeamAId, long? TeamBId, long? WinnerTeamId, long? LoserTeamId)>("""
+            SELECT "Id", "TeamAId", "TeamBId", "WinnerTeamId", "LoserTeamId" FROM arena_matches 
+            WHERE ("Id" = @Id OR "OriginalMatchId" = @Id)
+              AND (
+                  (@IsWin = true AND "WinnerTeamId" IS NULL) OR 
+                  (@IsWin = false AND "LoserTeamId" IS NULL)
+              )
+            ORDER BY "CreatedAt" ASC LIMIT 1
+            """, new { Id = matchId, IsWin = isWin }, transaction);
 
-        if (existing.TeamAId.HasValue && existing.TeamBId.HasValue)
+        if (candidate.Id != 0)
         {
-            if (existing.TeamAId == teamId || existing.TeamBId == teamId)
-                return; // Повторное сообщение от уже записанной команды — пропускаем
+            // Если нашли подходящий матч
+            if (candidate.TeamAId == teamId || candidate.TeamBId == teamId)
+                return; // Уже записаны в этот матч
 
-            // Третья+ команда — проверяем конфликт слота
-            var slotConflict = (isWin && existing.WinnerTeamId.HasValue)
-                            || (!isWin && existing.LoserTeamId.HasValue);
-
-            if (slotConflict)
+            if (!candidate.TeamBId.HasValue)
             {
-                var newMatchId = GenerateAlternativeMatchId(matchId, teamId);
-                await SaveMatchAsync(connection, transaction, newMatchId, teamId,
-                    matchPattern, isWin, scoreBefore, scoreAfter, participants, server,
-                    originalMatchId: originalMatchId ?? matchId);
-                return;
+                // Записываем как TeamB
+                await UpdateAsTeamB(connection, transaction, candidate.Id, teamId, scoreBefore, scoreAfter, isWin);
+            }
+            else
+            {
+                // Редкий случай: оба слота TeamA/TeamB заняты, но Winner/Loser еще свободен (например, третья команда в логе)
+                // Или просто обновляем Winner/Loser в существующей записи, если она была создана не совсем стандартно
+                const string updateWinnerLoserSql = """
+                    UPDATE arena_matches SET
+                        "WinnerTeamId" = COALESCE("WinnerTeamId", @WinnerTeamId),
+                        "LoserTeamId" = COALESCE("LoserTeamId", @LoserTeamId)
+                    WHERE "Id" = @Id
+                    """;
+                await connection.ExecuteAsync(updateWinnerLoserSql, new
+                {
+                    Id = candidate.Id,
+                    WinnerTeamId = isWin ? teamId : (long?)null,
+                    LoserTeamId = isWin ? (long?)null : teamId
+                }, transaction);
             }
 
-            logger.LogWarning("Match {MatchId}: unexpected free slot for team {TeamId}", matchId, teamId);
-            return;
+            // Переопределяем matchId для сохранения участников в правильную строку
+            matchId = candidate.Id;
         }
-
-        if (!existing.TeamAId.HasValue)
+        else
         {
-            // Первая команда — INSERT
-            const string insertSql = """
-                INSERT INTO arena_matches ("Id", "MatchPattern", "TeamAId", "TeamAScoreBefore", "TeamAScoreAfter",
-                    "WinnerTeamId", "LoserTeamId", "OriginalMatchId", "CreatedAt")
-                VALUES (@Id, @MatchPattern, @TeamId, @ScoreBefore, @ScoreAfter,
-                    @WinnerTeamId, @LoserTeamId, @OriginalMatchId, @CreatedAt)
-                ON CONFLICT ("Id") DO NOTHING
-                """;
+            // 2. Если не нашли куда "подселиться", используем стандартную логику проверки/вставки по matchId
+            var existing = await connection.QueryFirstOrDefaultAsync<(long? TeamAId, long? TeamBId, long? WinnerTeamId, long? LoserTeamId)>("""
+                SELECT "TeamAId", "TeamBId", "WinnerTeamId", "LoserTeamId" FROM arena_matches WHERE "Id" = @Id
+                """, new { Id = matchId }, transaction);
 
-            var inserted = await connection.ExecuteAsync(insertSql, new
+            if (existing.TeamAId.HasValue)
             {
-                Id = matchId,
-                MatchPattern = matchPattern,
-                TeamId = teamId,
-                ScoreBefore = scoreBefore,
-                ScoreAfter = scoreAfter,
-                WinnerTeamId = isWin ? teamId : (long?)null,
-                LoserTeamId = isWin ? (long?)null : teamId,
-                OriginalMatchId = originalMatchId,
-                CreatedAt = DateTime.UtcNow
-            }, transaction);
+                if (existing.TeamAId == teamId || existing.TeamBId == teamId)
+                    return;
 
-            if (inserted == 0)
-            {
-                // Кто-то уже вставил — перечитываем и проверяем конфликт слота
-                var current = await connection.QueryFirstOrDefaultAsync<(long? WinnerTeamId, long? LoserTeamId)>("""
-                    SELECT "WinnerTeamId", "LoserTeamId" FROM arena_matches WHERE "Id" = @Id
-                    """, new { Id = matchId }, transaction);
+                var slotConflict = (isWin && existing.WinnerTeamId.HasValue)
+                                || (!isWin && existing.LoserTeamId.HasValue);
 
-                var slotConflict = (isWin && current.WinnerTeamId.HasValue)
-                                || (!isWin && current.LoserTeamId.HasValue);
                 if (slotConflict)
                 {
                     var newMatchId = GenerateAlternativeMatchId(matchId, teamId);
@@ -402,30 +401,58 @@ public class ArenaMessageProcessor(
                     return;
                 }
 
-                await UpdateAsTeamB(connection, transaction, matchId, teamId, scoreBefore, scoreAfter, isWin);
+                if (!existing.TeamBId.HasValue)
+                {
+                    await UpdateAsTeamB(connection, transaction, matchId, teamId, scoreBefore, scoreAfter, isWin);
+                }
+                else
+                {
+                    // Заполняем только победителя/проигравшего, если слоты команд заняты (не должно происходить часто)
+                    const string updateWinnerLoserSql = """
+                        UPDATE arena_matches SET
+                            "WinnerTeamId" = COALESCE("WinnerTeamId", @WinnerTeamId),
+                            "LoserTeamId" = COALESCE("LoserTeamId", @LoserTeamId)
+                        WHERE "Id" = @Id
+                        """;
+                    await connection.ExecuteAsync(updateWinnerLoserSql, new
+                    {
+                        Id = matchId,
+                        WinnerTeamId = isWin ? teamId : (long?)null,
+                        LoserTeamId = isWin ? (long?)null : teamId
+                    }, transaction);
+                }
             }
-        }
-        else
-        {
-            if (existing.TeamAId == teamId)
+            else
             {
-                // Повторное сообщение от TeamA — пропускаем
-                return;
-            }
+                // Первая команда — INSERT
+                const string insertSql = """
+                    INSERT INTO arena_matches ("Id", "MatchPattern", "TeamAId", "TeamAScoreBefore", "TeamAScoreAfter",
+                        "WinnerTeamId", "LoserTeamId", "OriginalMatchId", "CreatedAt")
+                    VALUES (@Id, @MatchPattern, @TeamId, @ScoreBefore, @ScoreAfter,
+                        @WinnerTeamId, @LoserTeamId, @OriginalMatchId, @CreatedAt)
+                    ON CONFLICT ("Id") DO NOTHING
+                    """;
 
-            // Вторая команда — проверяем конфликт слота перед UPDATE
-            var slotConflict2 = (isWin && existing.WinnerTeamId.HasValue)
-                             || (!isWin && existing.LoserTeamId.HasValue);
-            if (slotConflict2)
-            {
-                var newMatchId = GenerateAlternativeMatchId(matchId, teamId);
-                await SaveMatchAsync(connection, transaction, newMatchId, teamId,
-                    matchPattern, isWin, scoreBefore, scoreAfter, participants, server,
-                    originalMatchId: originalMatchId ?? matchId);
-                return;
-            }
+                var inserted = await connection.ExecuteAsync(insertSql, new
+                {
+                    Id = matchId,
+                    MatchPattern = matchPattern,
+                    TeamId = teamId,
+                    ScoreBefore = scoreBefore,
+                    ScoreAfter = scoreAfter,
+                    WinnerTeamId = isWin ? teamId : (long?)null,
+                    LoserTeamId = isWin ? (long?)null : teamId,
+                    OriginalMatchId = originalMatchId,
+                    CreatedAt = DateTime.UtcNow
+                }, transaction);
 
-            await UpdateAsTeamB(connection, transaction, matchId, teamId, scoreBefore, scoreAfter, isWin);
+                if (inserted == 0)
+                {
+                    // Кто-то уже вставил — уходим на рекурсию (теперь она найдет запись через поиск в начале метода)
+                    await SaveMatchAsync(connection, transaction, matchId, teamId, matchPattern, isWin, scoreBefore, scoreAfter, participants, server, originalMatchId);
+                    return;
+                }
+            }
         }
 
         // Сохраняем участников
