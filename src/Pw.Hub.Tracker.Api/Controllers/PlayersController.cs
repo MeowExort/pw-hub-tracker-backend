@@ -34,6 +34,38 @@ public class PlayersController(TrackerDbContext db) : ControllerBase
         return new string(chars);
     }
 
+    private static readonly Dictionary<char, char> RuToEnLayout = new()
+    {
+        {'й','q'},{'ц','w'},{'у','e'},{'к','r'},{'е','t'},{'н','y'},{'г','u'},{'ш','i'},{'щ','o'},{'з','p'},{'х','['},{'ъ',']'},
+        {'ф','a'},{'ы','s'},{'в','d'},{'а','f'},{'п','g'},{'р','h'},{'о','j'},{'л','k'},{'д','l'},{'ж',';'},{'э','\''},
+        {'я','z'},{'ч','x'},{'с','c'},{'м','v'},{'и','b'},{'т','n'},{'ь','m'},{'б',','},{'ю','.'},
+        {'Й','Q'},{'Ц','W'},{'У','E'},{'К','R'},{'Е','T'},{'Н','Y'},{'Г','U'},{'Ш','I'},{'Щ','O'},{'З','P'},{'Х','{'},{'Ъ','}'},
+        {'Ф','A'},{'Ы','S'},{'В','D'},{'А','F'},{'П','G'},{'Р','H'},{'О','J'},{'Л','K'},{'Д','L'},{'Ж',':'},{'Э','"'},
+        {'Я','Z'},{'Ч','X'},{'С','C'},{'М','V'},{'И','B'},{'Т','N'},{'Ь','M'},{'Б','<'},{'Ю','>'},
+    };
+
+    private static readonly Dictionary<char, char> EnToRuLayout =
+        RuToEnLayout.ToDictionary(kvp => kvp.Value, kvp => kvp.Key);
+
+    private static string? TryConvertLayout(string input, Dictionary<char, char> map)
+    {
+        var chars = new char[input.Length];
+        var converted = false;
+        for (var i = 0; i < input.Length; i++)
+        {
+            if (map.TryGetValue(input[i], out var mapped))
+            {
+                chars[i] = mapped;
+                converted = true;
+            }
+            else
+            {
+                chars[i] = input[i];
+            }
+        }
+        return converted ? new string(chars) : null;
+    }
+
     private static readonly string LatinChars = "aeopcxykhbmtAEOPCXYKHBMT";
     private static readonly string CyrillicChars = "аеорсхукнвмтАЕОРСХУКНВМТ";
 
@@ -146,13 +178,25 @@ public class PlayersController(TrackerDbContext db) : ControllerBase
             paramIndex++;
         }
 
-        // Fuzzy search with homoglyph normalization using PostgreSQL translate()
+        // Fuzzy search with homoglyph normalization and keyboard layout detection
         if (!string.IsNullOrWhiteSpace(search))
         {
             var normalizedSearch = NormalizeHomoglyphs(search).ToLower();
-            conditions.Add($"lower(translate(p.\"Name\", '{LatinChars}', '{CyrillicChars}')) LIKE @p{paramIndex}");
-            parameters.Add(new Npgsql.NpgsqlParameter($"p{paramIndex}", $"%{normalizedSearch}%"));
-            paramIndex++;
+            var ruToEn = TryConvertLayout(search, RuToEnLayout);
+            var enToRu = TryConvertLayout(search, EnToRuLayout);
+
+            var searchVariants = new List<string> { normalizedSearch };
+            if (ruToEn != null) searchVariants.Add(NormalizeHomoglyphs(ruToEn).ToLower());
+            if (enToRu != null) searchVariants.Add(NormalizeHomoglyphs(enToRu).ToLower());
+
+            var orParts = new List<string>();
+            foreach (var variant in searchVariants)
+            {
+                orParts.Add($"lower(translate(p.\"Name\", '{LatinChars}', '{CyrillicChars}')) LIKE @p{paramIndex}");
+                parameters.Add(new Npgsql.NpgsqlParameter($"p{paramIndex}", $"%{variant}%"));
+                paramIndex++;
+            }
+            conditions.Add($"({string.Join(" OR ", orParts)})");
         }
 
         // Property filters
