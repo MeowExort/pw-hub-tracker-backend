@@ -23,9 +23,12 @@ public class PlayerPropertiesController(TrackerDbContext db) : ControllerBase
         // Группируем запросы по серверу для оптимизации
         var results = new List<object>();
 
-        var playerKeys = players.Select(p => new { p.Id, p.Server }).ToList();
-        var matchedProps = await db.PlayerMaxStats
-            .Where(pp => playerKeys.Any(k => k.Id == pp.PlayerId && k.Server == pp.Server))
+        var playerIds = players.Select(p => p.Id).Distinct().ToList();
+        var playerServers = players.Select(p => p.Server).Distinct().ToList();
+        var playerKeySet = players.Select(p => (p.Id, p.Server)).ToHashSet();
+
+        var matchedProps = (await db.PlayerMaxStats
+            .Where(pp => playerIds.Contains(pp.PlayerId) && playerServers.Contains(pp.Server))
             .Join(db.Players, pp => new { Id = pp.PlayerId, pp.Server }, pl => new { pl.Id, pl.Server }, (pp, pl) => new
             {
                 pp.PlayerId,
@@ -58,7 +61,9 @@ public class PlayerPropertiesController(TrackerDbContext db) : ControllerBase
                 pp.PeakGrade,
                 pp.UpdatedAt
             })
-            .ToListAsync();
+            .ToListAsync())
+            .Where(p => playerKeySet.Contains((p.PlayerId, p.Server)))
+            .ToList();
 
         results.AddRange(matchedProps);
 
