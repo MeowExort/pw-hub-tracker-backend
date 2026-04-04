@@ -123,6 +123,8 @@ public class ArenaMatchesController(TrackerDbContext db, ILogger<ArenaMatchesCon
                 m.TeamAScoreAfter,
                 m.TeamBScoreBefore,
                 m.TeamBScoreAfter,
+                TeamAMemberCount = m.Participants.Count(p => p.TeamId == m.TeamAId),
+                TeamBMemberCount = m.Participants.Count(p => p.TeamId == m.TeamBId),
                 m.CreatedAt
             })
             .ToListAsync();
