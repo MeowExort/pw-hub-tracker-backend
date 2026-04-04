@@ -121,8 +121,8 @@ public class PlayersController(TrackerDbContext db) : ControllerBase
                 (x, apJoin) => new { x.player, x.props, apJoin })
             .SelectMany(x => x.apJoin.DefaultIfEmpty(), (x, ap) => new { x.player, x.props, ap })
             .GroupJoin(db.ArenaTeams,
-                x => x.ap.TeamId,
-                t => t.Id,
+                x => x.ap != null ? (long?)x.ap.TeamId : null,
+                t => (long?)t.Id,
                 (x, teamJoin) => new { x.player, x.props, x.ap, teamJoin })
             .SelectMany(x => x.teamJoin.DefaultIfEmpty(), (x, team) => new { x.player, x.props, team });
 
@@ -142,60 +142,60 @@ public class PlayersController(TrackerDbContext db) : ControllerBase
         }
 
         // Property filters
-        if (p.HpMin.HasValue) extendedQuery = extendedQuery.Where(x => x.props != null && x.props.Hp >= p.HpMin.Value);
-        if (p.HpMax.HasValue) extendedQuery = extendedQuery.Where(x => x.props != null && x.props.Hp <= p.HpMax.Value);
+        if (p.HpMin.HasValue) extendedQuery = extendedQuery.Where(x => x.props.Hp >= p.HpMin.Value);
+        if (p.HpMax.HasValue) extendedQuery = extendedQuery.Where(x => x.props.Hp <= p.HpMax.Value);
         
-        if (p.DefenseMin.HasValue) extendedQuery = extendedQuery.Where(x => x.props != null && x.props.Defense >= p.DefenseMin.Value);
-        if (p.DefenseMax.HasValue) extendedQuery = extendedQuery.Where(x => x.props != null && x.props.Defense <= p.DefenseMax.Value);
+        if (p.DefenseMin.HasValue) extendedQuery = extendedQuery.Where(x => x.props.Defense >= p.DefenseMin.Value);
+        if (p.DefenseMax.HasValue) extendedQuery = extendedQuery.Where(x => x.props.Defense <= p.DefenseMax.Value);
 
-        if (p.ResistanceMin.HasValue) extendedQuery = extendedQuery.Where(x => x.props != null && x.props.Resistance.Any() && x.props.Resistance.Max() >= p.ResistanceMin.Value);
-        if (p.ResistanceMax.HasValue) extendedQuery = extendedQuery.Where(x => x.props != null && x.props.Resistance.Any() && x.props.Resistance.Max() <= p.ResistanceMax.Value);
+        if (p.ResistanceMin.HasValue) extendedQuery = extendedQuery.Where(x => x.props.Resistance.Any() && x.props.Resistance.Max() >= p.ResistanceMin.Value);
+        if (p.ResistanceMax.HasValue) extendedQuery = extendedQuery.Where(x => x.props.Resistance.Any() && x.props.Resistance.Max() <= p.ResistanceMax.Value);
 
-        if (p.DamageLowMin.HasValue) extendedQuery = extendedQuery.Where(x => x.props != null && x.props.DamageLow >= p.DamageLowMin.Value);
-        if (p.DamageHighMax.HasValue) extendedQuery = extendedQuery.Where(x => x.props != null && x.props.DamageHigh <= p.DamageHighMax.Value);
+        if (p.DamageLowMin.HasValue) extendedQuery = extendedQuery.Where(x => x.props.DamageLow >= p.DamageLowMin.Value);
+        if (p.DamageHighMax.HasValue) extendedQuery = extendedQuery.Where(x => x.props.DamageHigh <= p.DamageHighMax.Value);
 
-        if (p.DamageMagicLowMin.HasValue) extendedQuery = extendedQuery.Where(x => x.props != null && x.props.DamageMagicLow >= p.DamageMagicLowMin.Value);
-        if (p.DamageMagicHighMax.HasValue) extendedQuery = extendedQuery.Where(x => x.props != null && x.props.DamageMagicHigh <= p.DamageMagicHighMax.Value);
+        if (p.DamageMagicLowMin.HasValue) extendedQuery = extendedQuery.Where(x => x.props.DamageMagicLow >= p.DamageMagicLowMin.Value);
+        if (p.DamageMagicHighMax.HasValue) extendedQuery = extendedQuery.Where(x => x.props.DamageMagicHigh <= p.DamageMagicHighMax.Value);
 
-        if (p.AttackDegreeMin.HasValue) extendedQuery = extendedQuery.Where(x => x.props != null && x.props.AttackDegree >= p.AttackDegreeMin.Value);
-        if (p.AttackDegreeMax.HasValue) extendedQuery = extendedQuery.Where(x => x.props != null && x.props.AttackDegree <= p.AttackDegreeMax.Value);
+        if (p.AttackDegreeMin.HasValue) extendedQuery = extendedQuery.Where(x => x.props.AttackDegree >= p.AttackDegreeMin.Value);
+        if (p.AttackDegreeMax.HasValue) extendedQuery = extendedQuery.Where(x => x.props.AttackDegree <= p.AttackDegreeMax.Value);
 
-        if (p.DefendDegreeMin.HasValue) extendedQuery = extendedQuery.Where(x => x.props != null && x.props.DefendDegree >= p.DefendDegreeMin.Value);
-        if (p.DefendDegreeMax.HasValue) extendedQuery = extendedQuery.Where(x => x.props != null && x.props.DefendDegree <= p.DefendDegreeMax.Value);
+        if (p.DefendDegreeMin.HasValue) extendedQuery = extendedQuery.Where(x => x.props.DefendDegree >= p.DefendDegreeMin.Value);
+        if (p.DefendDegreeMax.HasValue) extendedQuery = extendedQuery.Where(x => x.props.DefendDegree <= p.DefendDegreeMax.Value);
 
-        if (p.VigourMin.HasValue) extendedQuery = extendedQuery.Where(x => x.props != null && x.props.Vigour >= p.VigourMin.Value);
-        if (p.VigourMax.HasValue) extendedQuery = extendedQuery.Where(x => x.props != null && x.props.Vigour <= p.VigourMax.Value);
+        if (p.VigourMin.HasValue) extendedQuery = extendedQuery.Where(x => x.props.Vigour >= p.VigourMin.Value);
+        if (p.VigourMax.HasValue) extendedQuery = extendedQuery.Where(x => x.props.Vigour <= p.VigourMax.Value);
 
-        if (p.AntiDefenseDegreeMin.HasValue) extendedQuery = extendedQuery.Where(x => x.props != null && x.props.AntiDefenseDegree >= p.AntiDefenseDegreeMin.Value);
-        if (p.AntiDefenseDegreeMax.HasValue) extendedQuery = extendedQuery.Where(x => x.props != null && x.props.AntiDefenseDegree <= p.AntiDefenseDegreeMax.Value);
+        if (p.AntiDefenseDegreeMin.HasValue) extendedQuery = extendedQuery.Where(x => x.props.AntiDefenseDegree >= p.AntiDefenseDegreeMin.Value);
+        if (p.AntiDefenseDegreeMax.HasValue) extendedQuery = extendedQuery.Where(x => x.props.AntiDefenseDegree <= p.AntiDefenseDegreeMax.Value);
 
-        if (p.AntiResistanceDegreeMin.HasValue) extendedQuery = extendedQuery.Where(x => x.props != null && x.props.AntiResistanceDegree >= p.AntiResistanceDegreeMin.Value);
-        if (p.AntiResistanceDegreeMax.HasValue) extendedQuery = extendedQuery.Where(x => x.props != null && x.props.AntiResistanceDegree <= p.AntiResistanceDegreeMax.Value);
+        if (p.AntiResistanceDegreeMin.HasValue) extendedQuery = extendedQuery.Where(x => x.props.AntiResistanceDegree >= p.AntiResistanceDegreeMin.Value);
+        if (p.AntiResistanceDegreeMax.HasValue) extendedQuery = extendedQuery.Where(x => x.props.AntiResistanceDegree <= p.AntiResistanceDegreeMax.Value);
 
-        if (p.PeakGradeMin.HasValue) extendedQuery = extendedQuery.Where(x => x.props != null && x.props.PeakGrade >= p.PeakGradeMin.Value);
-        if (p.PeakGradeMax.HasValue) extendedQuery = extendedQuery.Where(x => x.props != null && x.props.PeakGrade <= p.PeakGradeMax.Value);
+        if (p.PeakGradeMin.HasValue) extendedQuery = extendedQuery.Where(x => x.props.PeakGrade >= p.PeakGradeMin.Value);
+        if (p.PeakGradeMax.HasValue) extendedQuery = extendedQuery.Where(x => x.props.PeakGrade <= p.PeakGradeMax.Value);
 
         // Sorting
         var isAsc = p.SortOrder?.ToLower() == "asc";
         
         extendedQuery = p.SortBy.ToLower() switch
         {
-            "hp" => isAsc ? extendedQuery.OrderBy(x => x.props != null ? x.props.Hp : 0) : extendedQuery.OrderByDescending(x => x.props != null ? x.props.Hp : 0),
-            "defense" => isAsc ? extendedQuery.OrderBy(x => x.props != null ? x.props.Defense : 0) : extendedQuery.OrderByDescending(x => x.props != null ? x.props.Defense : 0),
-            "resistance" => isAsc ? extendedQuery.OrderBy(x => (x.props != null && x.props.Resistance.Any()) ? x.props.Resistance.Max() : 0) : extendedQuery.OrderByDescending(x => (x.props != null && x.props.Resistance.Any()) ? x.props.Resistance.Max() : 0),
+            "hp" => isAsc ? extendedQuery.OrderBy(x => x.props.Hp) : extendedQuery.OrderByDescending(x => x.props.Hp),
+            "defense" => isAsc ? extendedQuery.OrderBy(x => x.props.Defense) : extendedQuery.OrderByDescending(x => x.props.Defense),
+            "resistance" => isAsc ? extendedQuery.OrderBy(x => x.props.Resistance.Max()) : extendedQuery.OrderByDescending(x => x.props.Resistance.Max()),
             "damage" => isAsc 
-                ? extendedQuery.OrderBy(x => x.props != null ? (x.props.DamageLow + x.props.DamageHigh) / 2.0 : 0) 
-                : extendedQuery.OrderByDescending(x => x.props != null ? (x.props.DamageLow + x.props.DamageHigh) / 2.0 : 0),
+                ? extendedQuery.OrderBy(x => (x.props.DamageLow + x.props.DamageHigh) / 2.0) 
+                : extendedQuery.OrderByDescending(x => (x.props.DamageLow + x.props.DamageHigh) / 2.0),
             "damagemagic" => isAsc 
-                ? extendedQuery.OrderBy(x => x.props != null ? (x.props.DamageMagicLow + x.props.DamageMagicHigh) / 2.0 : 0) 
-                : extendedQuery.OrderByDescending(x => x.props != null ? (x.props.DamageMagicLow + x.props.DamageMagicHigh) / 2.0 : 0),
-            "attackdegree" => isAsc ? extendedQuery.OrderBy(x => x.props != null ? x.props.AttackDegree : 0) : extendedQuery.OrderByDescending(x => x.props != null ? x.props.AttackDegree : 0),
-            "defenddegree" => isAsc ? extendedQuery.OrderBy(x => x.props != null ? x.props.DefendDegree : 0) : extendedQuery.OrderByDescending(x => x.props != null ? x.props.DefendDegree : 0),
-            "vigour" => isAsc ? extendedQuery.OrderBy(x => x.props != null ? x.props.Vigour : 0) : extendedQuery.OrderByDescending(x => x.props != null ? x.props.Vigour : 0),
-            "antidefensedegree" => isAsc ? extendedQuery.OrderBy(x => x.props != null ? x.props.AntiDefenseDegree : 0) : extendedQuery.OrderByDescending(x => x.props != null ? x.props.AntiDefenseDegree : 0),
-            "antiresistancedegree" => isAsc ? extendedQuery.OrderBy(x => x.props != null ? x.props.AntiResistanceDegree : 0) : extendedQuery.OrderByDescending(x => x.props != null ? x.props.AntiResistanceDegree : 0),
-            "peakgrade" => isAsc ? extendedQuery.OrderBy(x => x.props != null ? x.props.PeakGrade : 0) : extendedQuery.OrderByDescending(x => x.props != null ? x.props.PeakGrade : 0),
-            _ => isAsc ? extendedQuery.OrderBy(x => x.props != null ? x.props.Hp : 0) : extendedQuery.OrderByDescending(x => x.props != null ? x.props.Hp : 0)
+                ? extendedQuery.OrderBy(x => (x.props.DamageMagicLow + x.props.DamageMagicHigh) / 2.0) 
+                : extendedQuery.OrderByDescending(x => (x.props.DamageMagicLow + x.props.DamageMagicHigh) / 2.0),
+            "attackdegree" => isAsc ? extendedQuery.OrderBy(x => x.props.AttackDegree) : extendedQuery.OrderByDescending(x => x.props.AttackDegree),
+            "defenddegree" => isAsc ? extendedQuery.OrderBy(x => x.props.DefendDegree) : extendedQuery.OrderByDescending(x => x.props.DefendDegree),
+            "vigour" => isAsc ? extendedQuery.OrderBy(x => x.props.Vigour) : extendedQuery.OrderByDescending(x => x.props.Vigour),
+            "antidefensedegree" => isAsc ? extendedQuery.OrderBy(x => x.props.AntiDefenseDegree) : extendedQuery.OrderByDescending(x => x.props.AntiDefenseDegree),
+            "antiresistancedegree" => isAsc ? extendedQuery.OrderBy(x => x.props.AntiResistanceDegree) : extendedQuery.OrderByDescending(x => x.props.AntiResistanceDegree),
+            "peakgrade" => isAsc ? extendedQuery.OrderBy(x => x.props.PeakGrade) : extendedQuery.OrderByDescending(x => x.props.PeakGrade),
+            _ => isAsc ? extendedQuery.OrderBy(x => x.props.Hp) : extendedQuery.OrderByDescending(x => x.props.Hp)
         };
 
         var total = await extendedQuery.CountAsync();
