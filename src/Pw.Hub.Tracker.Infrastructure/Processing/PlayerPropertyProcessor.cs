@@ -20,6 +20,7 @@ public class PlayerPropertyProcessor(
 
             await UpsertPlayerPropertyAsync(connection, transaction, message, resistance);
             await InsertPlayerPropertyHistoryAsync(connection, transaction, message, resistance);
+            await UpsertPlayerMaxStatsAsync(connection, transaction, message, resistance);
 
             await transaction.CommitAsync();
 
@@ -99,6 +100,58 @@ public class PlayerPropertyProcessor(
             msg.CritDamageBonus,
             msg.InvisibleDegree,
             msg.AntiInvisibleDegree,
+            msg.Vigour,
+            msg.AntiDefenseDegree,
+            msg.AntiResistanceDegree,
+            msg.PeakGrade,
+            UpdatedAt = DateTime.UtcNow
+        }, transaction);
+    }
+
+    private static async Task UpsertPlayerMaxStatsAsync(NpgsqlConnection connection, NpgsqlTransaction transaction,
+        PlayerPropertyMessage msg, long[] resistance)
+    {
+        const string sql = """
+            INSERT INTO player_max_stats ("PlayerId", "Server", "Hp", "Mp", "DamageLow", "DamageHigh",
+                "DamageMagicLow", "DamageMagicHigh", "Defense", "Resistance",
+                "AttackDegree", "DefendDegree", "Vigour",
+                "AntiDefenseDegree", "AntiResistanceDegree", "PeakGrade", "UpdatedAt")
+            VALUES (@PlayerId, @Server, @Hp, @Mp, @DamageLow, @DamageHigh,
+                @DamageMagicLow, @DamageMagicHigh, @Defense, @Resistance,
+                @AttackDegree, @DefendDegree, @Vigour,
+                @AntiDefenseDegree, @AntiResistanceDegree, @PeakGrade, @UpdatedAt)
+            ON CONFLICT ("PlayerId", "Server") DO UPDATE SET
+                "Hp" = GREATEST(player_max_stats."Hp", EXCLUDED."Hp"),
+                "Mp" = GREATEST(player_max_stats."Mp", EXCLUDED."Mp"),
+                "DamageLow" = GREATEST(player_max_stats."DamageLow", EXCLUDED."DamageLow"),
+                "DamageHigh" = GREATEST(player_max_stats."DamageHigh", EXCLUDED."DamageHigh"),
+                "DamageMagicLow" = GREATEST(player_max_stats."DamageMagicLow", EXCLUDED."DamageMagicLow"),
+                "DamageMagicHigh" = GREATEST(player_max_stats."DamageMagicHigh", EXCLUDED."DamageMagicHigh"),
+                "Defense" = GREATEST(player_max_stats."Defense", EXCLUDED."Defense"),
+                "Resistance" = EXCLUDED."Resistance",
+                "AttackDegree" = GREATEST(player_max_stats."AttackDegree", EXCLUDED."AttackDegree"),
+                "DefendDegree" = GREATEST(player_max_stats."DefendDegree", EXCLUDED."DefendDegree"),
+                "Vigour" = GREATEST(player_max_stats."Vigour", EXCLUDED."Vigour"),
+                "AntiDefenseDegree" = GREATEST(player_max_stats."AntiDefenseDegree", EXCLUDED."AntiDefenseDegree"),
+                "AntiResistanceDegree" = GREATEST(player_max_stats."AntiResistanceDegree", EXCLUDED."AntiResistanceDegree"),
+                "PeakGrade" = GREATEST(player_max_stats."PeakGrade", EXCLUDED."PeakGrade"),
+                "UpdatedAt" = EXCLUDED."UpdatedAt"
+            """;
+
+        await connection.ExecuteAsync(sql, new
+        {
+            msg.PlayerId,
+            msg.Server,
+            msg.Hp,
+            msg.Mp,
+            msg.DamageLow,
+            msg.DamageHigh,
+            msg.DamageMagicLow,
+            msg.DamageMagicHigh,
+            msg.Defense,
+            Resistance = resistance,
+            msg.AttackDegree,
+            msg.DefendDegree,
             msg.Vigour,
             msg.AntiDefenseDegree,
             msg.AntiResistanceDegree,

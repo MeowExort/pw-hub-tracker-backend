@@ -15,6 +15,7 @@ public class TrackerDbContext(DbContextOptions<TrackerDbContext> options) : DbCo
     public DbSet<ArenaMatchParticipant> ArenaMatchParticipants => Set<ArenaMatchParticipant>();
     public DbSet<PlayerProperty> PlayerProperties => Set<PlayerProperty>();
     public DbSet<PlayerPropertyHistory> PlayerPropertyHistory => Set<PlayerPropertyHistory>();
+    public DbSet<PlayerMaxStats> PlayerMaxStats => Set<PlayerMaxStats>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -112,6 +113,13 @@ public class TrackerDbContext(DbContextOptions<TrackerDbContext> options) : DbCo
             e.Property(x => x.Id).UseIdentityAlwaysColumn();
             e.HasIndex(x=>  new { x.PlayerId, x.Server });
             e.HasIndex(x => new { x.PlayerId, x.Server, x.RecordedAt });
+        });
+
+        modelBuilder.Entity<PlayerMaxStats>(e =>
+        {
+            e.ToTable("player_max_stats");
+            e.HasKey(x => new { x.PlayerId, x.Server });
+            e.Property(x => x.PlayerId).ValueGeneratedNever();
         });
     }
 }

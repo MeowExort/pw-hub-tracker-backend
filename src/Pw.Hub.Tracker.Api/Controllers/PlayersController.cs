@@ -110,7 +110,7 @@ public class PlayersController(TrackerDbContext db) : ControllerBase
         var conditions = new List<string>();
         var paramIndex = 0;
 
-        // Base query with LEFT JOINs using MAX-aggregated history
+        // Base query with LEFT JOINs using pre-computed max stats
         var sql = """
             SELECT
                 p."Id",
@@ -135,29 +135,7 @@ public class PlayersController(TrackerDbContext db) : ControllerBase
                 pp."PeakGrade",
                 pp."UpdatedAt" AS "PropertiesUpdatedAt"
             FROM players p
-            LEFT JOIN LATERAL (
-                SELECT
-                    MAX(h."Hp") AS "Hp",
-                    MAX(h."Mp") AS "Mp",
-                    MAX(h."DamageLow") AS "DamageLow",
-                    MAX(h."DamageHigh") AS "DamageHigh",
-                    MAX(h."DamageMagicLow") AS "DamageMagicLow",
-                    MAX(h."DamageMagicHigh") AS "DamageMagicHigh",
-                    MAX(h."Defense") AS "Defense",
-                    (SELECT h2."Resistance" FROM player_property_history h2
-                     WHERE h2."PlayerId" = p."Id" AND h2."Server" = p."Server"
-                     ORDER BY h2."RecordedAt" DESC LIMIT 1) AS "Resistance",
-                    MAX(h."AttackDegree") AS "AttackDegree",
-                    MAX(h."DefendDegree") AS "DefendDegree",
-                    MAX(h."Vigour") AS "Vigour",
-                    MAX(h."AntiDefenseDegree") AS "AntiDefenseDegree",
-                    MAX(h."AntiResistanceDegree") AS "AntiResistanceDegree",
-                    MAX(h."PeakGrade") AS "PeakGrade",
-                    MAX(h."RecordedAt") AS "UpdatedAt"
-                FROM player_property_history h
-                WHERE h."PlayerId" = p."Id" AND h."Server" = p."Server"
-                HAVING COUNT(*) > 0
-            ) pp ON true
+            LEFT JOIN player_max_stats pp ON pp."PlayerId" = p."Id" AND pp."Server" = p."Server"
             LEFT JOIN arena_team_members tm ON tm."PlayerId" = p."Id" AND tm."PlayerServer" = p."Server"
             LEFT JOIN arena_teams t ON t."Id" = tm."TeamId"
             """;
@@ -265,25 +243,7 @@ public class PlayersController(TrackerDbContext db) : ControllerBase
 
         // Count query
         var countSql = $@"SELECT COUNT(*) FROM players p
-            LEFT JOIN LATERAL (
-                SELECT
-                    MAX(h.""Hp"") AS ""Hp"", MAX(h.""Mp"") AS ""Mp"",
-                    MAX(h.""DamageLow"") AS ""DamageLow"", MAX(h.""DamageHigh"") AS ""DamageHigh"",
-                    MAX(h.""DamageMagicLow"") AS ""DamageMagicLow"", MAX(h.""DamageMagicHigh"") AS ""DamageMagicHigh"",
-                    MAX(h.""Defense"") AS ""Defense"",
-                    (SELECT h2.""Resistance"" FROM player_property_history h2
-                     WHERE h2.""PlayerId"" = p.""Id"" AND h2.""Server"" = p.""Server""
-                     ORDER BY h2.""RecordedAt"" DESC LIMIT 1) AS ""Resistance"",
-                    MAX(h.""AttackDegree"") AS ""AttackDegree"", MAX(h.""DefendDegree"") AS ""DefendDegree"",
-                    MAX(h.""Vigour"") AS ""Vigour"",
-                    MAX(h.""AntiDefenseDegree"") AS ""AntiDefenseDegree"",
-                    MAX(h.""AntiResistanceDegree"") AS ""AntiResistanceDegree"",
-                    MAX(h.""PeakGrade"") AS ""PeakGrade"",
-                    MAX(h.""RecordedAt"") AS ""UpdatedAt""
-                FROM player_property_history h
-                WHERE h.""PlayerId"" = p.""Id"" AND h.""Server"" = p.""Server""
-                HAVING COUNT(*) > 0
-            ) pp ON true
+            LEFT JOIN player_max_stats pp ON pp.""PlayerId"" = p.""Id"" AND pp.""Server"" = p.""Server""
             LEFT JOIN arena_team_members tm ON tm.""PlayerId"" = p.""Id"" AND tm.""PlayerServer"" = p.""Server""
             LEFT JOIN arena_teams t ON t.""Id"" = tm.""TeamId""{whereClause}";
 
