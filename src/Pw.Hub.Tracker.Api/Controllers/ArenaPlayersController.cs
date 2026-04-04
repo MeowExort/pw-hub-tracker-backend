@@ -26,8 +26,8 @@ public class ArenaPlayersController(TrackerDbContext db) : ControllerBase
                 p.Id,
                 Server = p.PlayerServer,
                 p.Player.Name,
-                p.TeamId,
-                TeamName = p.Team.Name,
+                TeamId = (long?)p.TeamId,
+                TeamName = (string?)p.Team.Name,
                 p.Player.Cls,
                 p.Player.Gender,
                 p.RewardMoney,
@@ -60,7 +60,7 @@ public class ArenaPlayersController(TrackerDbContext db) : ControllerBase
                     p.Id,
                     Server = p.Server,
                     p.Name,
-                    TeamId = 0L,
+                    TeamId = (long?)null,
                     TeamName = (string?)null,
                     p.Cls,
                     p.Gender,
@@ -69,14 +69,32 @@ public class ArenaPlayersController(TrackerDbContext db) : ControllerBase
                     LastBattleTimestamp = 0L,
                     LastVisiteTimestamp = 0L,
                     p.UpdatedAt,
-                    BattleStats = new List<dynamic>()
+                    BattleStats = new List<object>()
                 })
                 .FirstOrDefaultAsync();
 
             if (fallbackPlayer is null)
                 return NotFound();
 
-            player = (dynamic)fallbackPlayer;
+            return Ok(new
+            {
+                fallbackPlayer.Id,
+                fallbackPlayer.Server,
+                fallbackPlayer.Name,
+                fallbackPlayer.TeamId,
+                fallbackPlayer.TeamName,
+                fallbackPlayer.Cls,
+                fallbackPlayer.Gender,
+                fallbackPlayer.RewardMoney,
+                fallbackPlayer.WeekResetTimestamp,
+                fallbackPlayer.LastBattleTimestamp,
+                fallbackPlayer.LastVisiteTimestamp,
+                fallbackPlayer.UpdatedAt,
+                fallbackPlayer.BattleStats,
+                Properties = (object?)null,
+                ScoreHistory = (object?)null,
+                Team = (object?)null
+            });
         }
 
         object? properties = null;

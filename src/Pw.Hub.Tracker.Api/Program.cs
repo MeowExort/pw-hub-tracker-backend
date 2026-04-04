@@ -18,7 +18,7 @@ var postgresConnectionString = new NpgsqlConnectionStringBuilder(
     builder.Configuration.GetConnectionString("Postgres")) { MaxPoolSize = 20 }.ConnectionString;
 
 builder.Services.AddDbContext<TrackerDbContext>(options =>
-    options.UseNpgsql(postgresConnectionString)
+    options.UseNpgsql(postgresConnectionString, o => o.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery))
         .UseQueryTrackingBehavior(QueryTrackingBehavior.NoTracking));
 
 var app = builder.Build();

@@ -180,22 +180,22 @@ public class PlayersController(TrackerDbContext db) : ControllerBase
         
         extendedQuery = p.SortBy.ToLower() switch
         {
-            "hp" => isAsc ? extendedQuery.OrderBy(x => x.props.Hp) : extendedQuery.OrderByDescending(x => x.props.Hp),
-            "defense" => isAsc ? extendedQuery.OrderBy(x => x.props.Defense) : extendedQuery.OrderByDescending(x => x.props.Defense),
-            "resistance" => isAsc ? extendedQuery.OrderBy(x => x.props.Resistance.Any() ? x.props.Resistance.Max() : 0) : extendedQuery.OrderByDescending(x => x.props.Resistance.Any() ? x.props.Resistance.Max() : 0),
+            "hp" => isAsc ? extendedQuery.OrderBy(x => x.props != null ? x.props.Hp : 0) : extendedQuery.OrderByDescending(x => x.props != null ? x.props.Hp : 0),
+            "defense" => isAsc ? extendedQuery.OrderBy(x => x.props != null ? x.props.Defense : 0) : extendedQuery.OrderByDescending(x => x.props != null ? x.props.Defense : 0),
+            "resistance" => isAsc ? extendedQuery.OrderBy(x => (x.props != null && x.props.Resistance.Any()) ? x.props.Resistance.Max() : 0) : extendedQuery.OrderByDescending(x => (x.props != null && x.props.Resistance.Any()) ? x.props.Resistance.Max() : 0),
             "damage" => isAsc 
-                ? extendedQuery.OrderBy(x => (x.props.DamageLow + x.props.DamageHigh) / 2.0) 
-                : extendedQuery.OrderByDescending(x => (x.props.DamageLow + x.props.DamageHigh) / 2.0),
+                ? extendedQuery.OrderBy(x => x.props != null ? (x.props.DamageLow + x.props.DamageHigh) / 2.0 : 0) 
+                : extendedQuery.OrderByDescending(x => x.props != null ? (x.props.DamageLow + x.props.DamageHigh) / 2.0 : 0),
             "damagemagic" => isAsc 
-                ? extendedQuery.OrderBy(x => (x.props.DamageMagicLow + x.props.DamageMagicHigh) / 2.0) 
-                : extendedQuery.OrderByDescending(x => (x.props.DamageMagicLow + x.props.DamageMagicHigh) / 2.0),
-            "attackdegree" => isAsc ? extendedQuery.OrderBy(x => x.props.AttackDegree) : extendedQuery.OrderByDescending(x => x.props.AttackDegree),
-            "defenddegree" => isAsc ? extendedQuery.OrderBy(x => x.props.DefendDegree) : extendedQuery.OrderByDescending(x => x.props.DefendDegree),
-            "vigour" => isAsc ? extendedQuery.OrderBy(x => x.props.Vigour) : extendedQuery.OrderByDescending(x => x.props.Vigour),
-            "antidefensedegree" => isAsc ? extendedQuery.OrderBy(x => x.props.AntiDefenseDegree) : extendedQuery.OrderByDescending(x => x.props.AntiDefenseDegree),
-            "antiresistancedegree" => isAsc ? extendedQuery.OrderBy(x => x.props.AntiResistanceDegree) : extendedQuery.OrderByDescending(x => x.props.AntiResistanceDegree),
-            "peakgrade" => isAsc ? extendedQuery.OrderBy(x => x.props.PeakGrade) : extendedQuery.OrderByDescending(x => x.props.PeakGrade),
-            _ => extendedQuery.OrderByDescending(x => x.props.Hp)
+                ? extendedQuery.OrderBy(x => x.props != null ? (x.props.DamageMagicLow + x.props.DamageMagicHigh) / 2.0 : 0) 
+                : extendedQuery.OrderByDescending(x => x.props != null ? (x.props.DamageMagicLow + x.props.DamageMagicHigh) / 2.0 : 0),
+            "attackdegree" => isAsc ? extendedQuery.OrderBy(x => x.props != null ? x.props.AttackDegree : 0) : extendedQuery.OrderByDescending(x => x.props != null ? x.props.AttackDegree : 0),
+            "defenddegree" => isAsc ? extendedQuery.OrderBy(x => x.props != null ? x.props.DefendDegree : 0) : extendedQuery.OrderByDescending(x => x.props != null ? x.props.DefendDegree : 0),
+            "vigour" => isAsc ? extendedQuery.OrderBy(x => x.props != null ? x.props.Vigour : 0) : extendedQuery.OrderByDescending(x => x.props != null ? x.props.Vigour : 0),
+            "antidefensedegree" => isAsc ? extendedQuery.OrderBy(x => x.props != null ? x.props.AntiDefenseDegree : 0) : extendedQuery.OrderByDescending(x => x.props != null ? x.props.AntiDefenseDegree : 0),
+            "antiresistancedegree" => isAsc ? extendedQuery.OrderBy(x => x.props != null ? x.props.AntiResistanceDegree : 0) : extendedQuery.OrderByDescending(x => x.props != null ? x.props.AntiResistanceDegree : 0),
+            "peakgrade" => isAsc ? extendedQuery.OrderBy(x => x.props != null ? x.props.PeakGrade : 0) : extendedQuery.OrderByDescending(x => x.props != null ? x.props.PeakGrade : 0),
+            _ => isAsc ? extendedQuery.OrderBy(x => x.props != null ? x.props.Hp : 0) : extendedQuery.OrderByDescending(x => x.props != null ? x.props.Hp : 0)
         };
 
         var total = await extendedQuery.CountAsync();
