@@ -69,4 +69,40 @@ public class PlayerPropertiesController(TrackerDbContext db) : ControllerBase
 
         return Ok(results);
     }
+
+    [HttpGet("max")]
+    public async Task<IActionResult> GetMaxProperties()
+    {
+        var result = await db.PlayerMaxStats
+            .GroupBy(_ => 1)
+            .Select(g => new
+            {
+                Hp = g.Max(x => x.Hp),
+                Mp = g.Max(x => x.Mp),
+                DamageLow = g.Max(x => x.DamageLow),
+                DamageHigh = g.Max(x => x.DamageHigh),
+                DamageMagicLow = g.Max(x => x.DamageMagicLow),
+                DamageMagicHigh = g.Max(x => x.DamageMagicHigh),
+                Defense = g.Max(x => x.Defense),
+                Attack = g.Max(x => x.Attack),
+                Armor = g.Max(x => x.Armor),
+                AttackSpeed = g.Max(x => x.AttackSpeed),
+                RunSpeed = g.Max(x => x.RunSpeed),
+                AttackDegree = g.Max(x => x.AttackDegree),
+                DefendDegree = g.Max(x => x.DefendDegree),
+                CritRate = g.Max(x => x.CritRate),
+                DamageReduce = g.Max(x => x.DamageReduce),
+                Prayspeed = g.Max(x => x.Prayspeed),
+                CritDamageBonus = g.Max(x => x.CritDamageBonus),
+                InvisibleDegree = g.Max(x => x.InvisibleDegree),
+                AntiInvisibleDegree = g.Max(x => x.AntiInvisibleDegree),
+                Vigour = g.Max(x => x.Vigour),
+                AntiDefenseDegree = g.Max(x => x.AntiDefenseDegree),
+                AntiResistanceDegree = g.Max(x => x.AntiResistanceDegree),
+                PeakGrade = g.Max(x => x.PeakGrade),
+            })
+            .FirstOrDefaultAsync();
+
+        return Ok(result);
+    }
 }
