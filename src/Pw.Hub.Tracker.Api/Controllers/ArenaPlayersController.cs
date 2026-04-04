@@ -79,40 +79,39 @@ public class ArenaPlayersController(TrackerDbContext db) : ControllerBase
             object? fallbackProperties = null;
             if (includeList.Contains("properties"))
             {
-                fallbackProperties = await db.PlayerPropertyHistory
+                fallbackProperties = await db.PlayerMaxStats
                     .Where(pp => pp.PlayerId == playerId && pp.Server == server)
-                    .GroupBy(pp => new { pp.PlayerId, pp.Server })
-                    .Select(g => new
+                    .Join(db.Players, pp => new { Id = pp.PlayerId, pp.Server }, pl => new { pl.Id, pl.Server }, (pp, pl) => new
                     {
-                        g.Key.PlayerId,
-                        PlayerCls = (int?)db.Players.Where(pl => pl.Id == g.Key.PlayerId && pl.Server == g.Key.Server).Select(pl => pl.Cls).FirstOrDefault(),
-                        PlayerName = db.Players.Where(pl => pl.Id == g.Key.PlayerId && pl.Server == g.Key.Server).Select(pl => pl.Name).FirstOrDefault(),
-                        g.Key.Server,
-                        Hp = g.Max(x => x.Hp),
-                        Mp = g.Max(x => x.Mp),
-                        DamageLow = g.Max(x => x.DamageLow),
-                        DamageHigh = g.Max(x => x.DamageHigh),
-                        DamageMagicLow = g.Max(x => x.DamageMagicLow),
-                        DamageMagicHigh = g.Max(x => x.DamageMagicHigh),
-                        Defense = g.Max(x => x.Defense),
-                        Resistance = g.OrderByDescending(x => x.RecordedAt).Select(x => x.Resistance).FirstOrDefault(),
-                        Attack = g.Max(x => x.Attack),
-                        Armor = g.Max(x => x.Armor),
-                        AttackSpeed = g.Max(x => x.AttackSpeed),
-                        RunSpeed = g.Max(x => x.RunSpeed),
-                        AttackDegree = g.Max(x => x.AttackDegree),
-                        DefendDegree = g.Max(x => x.DefendDegree),
-                        CritRate = g.Max(x => x.CritRate),
-                        DamageReduce = g.Max(x => x.DamageReduce),
-                        Prayspeed = g.Max(x => x.Prayspeed),
-                        CritDamageBonus = g.Max(x => x.CritDamageBonus),
-                        InvisibleDegree = g.Max(x => x.InvisibleDegree),
-                        AntiInvisibleDegree = g.Max(x => x.AntiInvisibleDegree),
-                        Vigour = g.Max(x => x.Vigour),
-                        AntiDefenseDegree = g.Max(x => x.AntiDefenseDegree),
-                        AntiResistanceDegree = g.Max(x => x.AntiResistanceDegree),
-                        PeakGrade = g.Max(x => x.PeakGrade),
-                        UpdatedAt = g.Max(x => x.RecordedAt)
+                        pp.PlayerId,
+                        PlayerCls = (int?)pl.Cls,
+                        PlayerName = pl.Name,
+                        pp.Server,
+                        pp.Hp,
+                        pp.Mp,
+                        pp.DamageLow,
+                        pp.DamageHigh,
+                        pp.DamageMagicLow,
+                        pp.DamageMagicHigh,
+                        pp.Defense,
+                        pp.Resistance,
+                        pp.Attack,
+                        pp.Armor,
+                        pp.AttackSpeed,
+                        pp.RunSpeed,
+                        pp.AttackDegree,
+                        pp.DefendDegree,
+                        pp.CritRate,
+                        pp.DamageReduce,
+                        pp.Prayspeed,
+                        pp.CritDamageBonus,
+                        pp.InvisibleDegree,
+                        pp.AntiInvisibleDegree,
+                        pp.Vigour,
+                        pp.AntiDefenseDegree,
+                        pp.AntiResistanceDegree,
+                        pp.PeakGrade,
+                        pp.UpdatedAt
                     })
                     .FirstOrDefaultAsync();
             }
@@ -141,40 +140,39 @@ public class ArenaPlayersController(TrackerDbContext db) : ControllerBase
         object? properties = null;
         if (includeList.Contains("properties"))
         {
-            properties = await db.PlayerPropertyHistory
+            properties = await db.PlayerMaxStats
                 .Where(pp => pp.PlayerId == playerId && pp.Server == server)
-                .GroupBy(pp => new { pp.PlayerId, pp.Server })
-                .Select(g => new
+                .Join(db.Players, pp => new { Id = pp.PlayerId, pp.Server }, pl => new { pl.Id, pl.Server }, (pp, pl) => new
                 {
-                    g.Key.PlayerId,
-                    PlayerCls = (int?)db.Players.Where(pl => pl.Id == g.Key.PlayerId && pl.Server == g.Key.Server).Select(pl => pl.Cls).FirstOrDefault(),
-                    PlayerName = db.Players.Where(pl => pl.Id == g.Key.PlayerId && pl.Server == g.Key.Server).Select(pl => pl.Name).FirstOrDefault(),
-                    g.Key.Server,
-                    Hp = g.Max(x => x.Hp),
-                    Mp = g.Max(x => x.Mp),
-                    DamageLow = g.Max(x => x.DamageLow),
-                    DamageHigh = g.Max(x => x.DamageHigh),
-                    DamageMagicLow = g.Max(x => x.DamageMagicLow),
-                    DamageMagicHigh = g.Max(x => x.DamageMagicHigh),
-                    Defense = g.Max(x => x.Defense),
-                    Resistance = g.OrderByDescending(x => x.RecordedAt).Select(x => x.Resistance).FirstOrDefault(),
-                    Attack = g.Max(x => x.Attack),
-                    Armor = g.Max(x => x.Armor),
-                    AttackSpeed = g.Max(x => x.AttackSpeed),
-                    RunSpeed = g.Max(x => x.RunSpeed),
-                    AttackDegree = g.Max(x => x.AttackDegree),
-                    DefendDegree = g.Max(x => x.DefendDegree),
-                    CritRate = g.Max(x => x.CritRate),
-                    DamageReduce = g.Max(x => x.DamageReduce),
-                    Prayspeed = g.Max(x => x.Prayspeed),
-                    CritDamageBonus = g.Max(x => x.CritDamageBonus),
-                    InvisibleDegree = g.Max(x => x.InvisibleDegree),
-                    AntiInvisibleDegree = g.Max(x => x.AntiInvisibleDegree),
-                    Vigour = g.Max(x => x.Vigour),
-                    AntiDefenseDegree = g.Max(x => x.AntiDefenseDegree),
-                    AntiResistanceDegree = g.Max(x => x.AntiResistanceDegree),
-                    PeakGrade = g.Max(x => x.PeakGrade),
-                    UpdatedAt = g.Max(x => x.RecordedAt)
+                    pp.PlayerId,
+                    PlayerCls = (int?)pl.Cls,
+                    PlayerName = pl.Name,
+                    pp.Server,
+                    pp.Hp,
+                    pp.Mp,
+                    pp.DamageLow,
+                    pp.DamageHigh,
+                    pp.DamageMagicLow,
+                    pp.DamageMagicHigh,
+                    pp.Defense,
+                    pp.Resistance,
+                    pp.Attack,
+                    pp.Armor,
+                    pp.AttackSpeed,
+                    pp.RunSpeed,
+                    pp.AttackDegree,
+                    pp.DefendDegree,
+                    pp.CritRate,
+                    pp.DamageReduce,
+                    pp.Prayspeed,
+                    pp.CritDamageBonus,
+                    pp.InvisibleDegree,
+                    pp.AntiInvisibleDegree,
+                    pp.Vigour,
+                    pp.AntiDefenseDegree,
+                    pp.AntiResistanceDegree,
+                    pp.PeakGrade,
+                    pp.UpdatedAt
                 })
                 .FirstOrDefaultAsync();
         }

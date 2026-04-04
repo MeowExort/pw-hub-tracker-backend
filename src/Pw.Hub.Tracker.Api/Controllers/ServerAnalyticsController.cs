@@ -79,7 +79,7 @@ public class ServerAnalyticsController(TrackerDbContext db) : ControllerBase
     [HttpGet("player-stats-comparison")]
     public async Task<IActionResult> GetPlayerStatsComparison()
     {
-        var data = await db.PlayerProperties
+        var data = await db.PlayerMaxStats
             .GroupBy(p => p.Server)
             .Select(g => new
             {
