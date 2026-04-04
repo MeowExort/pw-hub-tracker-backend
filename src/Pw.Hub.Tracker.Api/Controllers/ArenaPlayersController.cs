@@ -52,7 +52,32 @@ public class ArenaPlayersController(TrackerDbContext db) : ControllerBase
             .FirstOrDefaultAsync();
 
         if (player is null)
-            return NotFound();
+        {
+            var fallbackPlayer = await db.Players
+                .Where(p => p.Id == playerId && p.Server == server)
+                .Select(p => new
+                {
+                    p.Id,
+                    Server = p.Server,
+                    p.Name,
+                    TeamId = 0L,
+                    TeamName = (string?)null,
+                    p.Cls,
+                    p.Gender,
+                    RewardMoney = 0L,
+                    WeekResetTimestamp = 0L,
+                    LastBattleTimestamp = 0L,
+                    LastVisiteTimestamp = 0L,
+                    p.UpdatedAt,
+                    BattleStats = new List<dynamic>()
+                })
+                .FirstOrDefaultAsync();
+
+            if (fallbackPlayer is null)
+                return NotFound();
+
+            player = (dynamic)fallbackPlayer;
+        }
 
         object? properties = null;
         if (includeList.Contains("properties"))
