@@ -1,236 +1,265 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using Pw.Hub.Tracker.Domain.Entities;
 using Pw.Hub.Tracker.Infrastructure.Data;
-using Pw.Hub.Tracker.Infrastructure.Helpers;
 
 namespace Pw.Hub.Tracker.Api.Controllers;
 
-public class GetPlayersParams
-{
-    public int Page { get; set; } = 1;
-    public int PageSize { get; set; } = 20;
-    public string? Search { get; set; }
-    public string? Server { get; set; }
-    public int? Cls { get; set; }
-    public string SortBy { get; set; } = "hp";
-    public string SortOrder { get; set; } = "desc";
-    
-    public long? HpMin { get; set; }
-    public long? HpMax { get; set; }
-    public long? DefenseMin { get; set; }
-    public long? DefenseMax { get; set; }
-    public long? ResistanceMin { get; set; }
-    public long? ResistanceMax { get; set; }
-    public long? DamageLowMin { get; set; }
-    public long? DamageHighMax { get; set; }
-    public long? DamageMagicLowMin { get; set; }
-    public long? DamageMagicHighMax { get; set; }
-    public int? AttackDegreeMin { get; set; }
-    public int? AttackDegreeMax { get; set; }
-    public int? DefendDegreeMin { get; set; }
-    public int? DefendDegreeMax { get; set; }
-    public long? VigourMin { get; set; }
-    public long? VigourMax { get; set; }
-    public int? AntiDefenseDegreeMin { get; set; }
-    public int? AntiDefenseDegreeMax { get; set; }
-    public int? AntiResistanceDegreeMin { get; set; }
-    public int? AntiResistanceDegreeMax { get; set; }
-    public int? PeakGradeMin { get; set; }
-    public int? PeakGradeMax { get; set; }
-}
-
-public class PlayerListItem
-{
-    public long Id { get; set; }
-    public string? Name { get; set; }
-    public int Cls { get; set; }
-    public string? Server { get; set; }
-    public long? TeamId { get; set; }
-    public string? TeamName { get; set; }
-    public PlayerPropertiesDto? Properties { get; set; }
-}
-
-public class PlayerPropertiesDto
-{
-    public long Hp { get; set; }
-    public long Mp { get; set; }
-    public long DamageLow { get; set; }
-    public long DamageHigh { get; set; }
-    public long DamageMagicLow { get; set; }
-    public long DamageMagicHigh { get; set; }
-    public long Defense { get; set; }
-    public long[] Resistance { get; set; } = [];
-    public int AttackDegree { get; set; }
-    public int DefendDegree { get; set; }
-    public long Vigour { get; set; }
-    public int AntiDefenseDegree { get; set; }
-    public int AntiResistanceDegree { get; set; }
-    public int PeakGrade { get; set; }
-    public DateTime UpdatedAt { get; set; }
-}
-
 [ApiController]
-[Route("api/[controller]")]
+[Route("api/players")]
 public class PlayersController(TrackerDbContext db) : ControllerBase
 {
-    [HttpGet]
-    public async Task<IActionResult> GetPlayers([FromQuery] GetPlayersParams p)
+    private static readonly HashSet<string> AllowedSortFields = new(StringComparer.OrdinalIgnoreCase)
     {
-        var pageSize = Math.Clamp(p.PageSize, 1, 100);
-        var page = Math.Max(p.Page, 1);
+        "hp", "defense", "resistance", "damage", "damageMagic",
+        "attackDegree", "defendDegree", "vigour",
+        "antiDefenseDegree", "antiResistanceDegree", "peakGrade"
+    };
 
-        var query = db.Players.AsQueryable();
-
-        // Group PlayerPropertyHistory to get max values for each property per player
-        var propsMaxQuery = db.PlayerPropertyHistory
-            .GroupBy(ph => new { ph.PlayerId, ph.Server })
-            .Select(g => new
-            {
-                g.Key.PlayerId,
-                g.Key.Server,
-                Hp = g.Max(ph => ph.Hp),
-                Mp = g.Max(ph => ph.Mp),
-                DamageLow = g.Max(ph => ph.DamageLow),
-                DamageHigh = g.Max(ph => ph.DamageHigh),
-                DamageMagicLow = g.Max(ph => ph.DamageMagicLow),
-                DamageMagicHigh = g.Max(ph => ph.DamageMagicHigh),
-                Defense = g.Max(ph => ph.Defense),
-                // For resistance, we typically want the latest one or handle it specifically.
-                // Based on previous requirements, we'll take the resistance from the most recent entry.
-                Resistance = g.OrderByDescending(ph => ph.RecordedAt).Select(ph => ph.Resistance).FirstOrDefault(),
-                AttackDegree = g.Max(ph => ph.AttackDegree),
-                DefendDegree = g.Max(ph => ph.DefendDegree),
-                Vigour = g.Max(ph => ph.Vigour),
-                AntiDefenseDegree = g.Max(ph => ph.AntiDefenseDegree),
-                AntiResistanceDegree = g.Max(ph => ph.AntiResistanceDegree),
-                PeakGrade = g.Max(ph => ph.PeakGrade),
-                UpdatedAt = g.Max(ph => ph.RecordedAt)
-            });
-
-        // Join with aggregated properties and optionally with arena players/teams
-        var extendedQuery = db.Players
-            .GroupJoin(propsMaxQuery, 
-                p => new { p.Id, p.Server }, 
-                pp => new { Id = pp.PlayerId, pp.Server }, 
-                (player, propsJoin) => new { player, propsJoin })
-            .SelectMany(x => x.propsJoin.DefaultIfEmpty(), (x, props) => new { x.player, props })
-            .GroupJoin(db.ArenaPlayers,
-                x => new { x.player.Id, PlayerServer = x.player.Server },
-                ap => new { ap.Id, ap.PlayerServer },
-                (x, apJoin) => new { x.player, x.props, apJoin })
-            .SelectMany(x => x.apJoin.DefaultIfEmpty(), (x, ap) => new { x.player, x.props, ap })
-            .GroupJoin(db.ArenaTeams,
-                x => x.ap != null ? (long?)x.ap.TeamId : null,
-                t => (long?)t.Id,
-                (x, teamJoin) => new { x.player, x.props, x.ap, teamJoin })
-            .SelectMany(x => x.teamJoin.DefaultIfEmpty(), (x, team) => new { x.player, x.props, team });
-
-        // Filtering
-        if (!string.IsNullOrWhiteSpace(p.Server))
-            extendedQuery = extendedQuery.Where(x => x.player.Server == p.Server);
-
-        if (p.Cls.HasValue)
-            extendedQuery = extendedQuery.Where(x => x.player.Cls == p.Cls.Value);
-
-        if (!string.IsNullOrWhiteSpace(p.Search))
+    private static string NormalizeHomoglyphs(string input)
+    {
+        var chars = input.ToCharArray();
+        for (var i = 0; i < chars.Length; i++)
         {
-            var normalized = HomoglyphHelper.Normalize(p.Search.Trim());
-            extendedQuery = extendedQuery.Where(x => 
-                EF.Functions.ILike(x.player.Name, $"%{p.Search}%") || 
-                EF.Functions.ILike(x.player.Name, $"%{normalized}%"));
+            chars[i] = chars[i] switch
+            {
+                'a' => 'а', 'e' => 'е', 'o' => 'о', 'c' => 'с',
+                'p' => 'р', 'x' => 'х', 'y' => 'у', 'k' => 'к',
+                'A' => 'А', 'E' => 'Е', 'O' => 'О', 'C' => 'С',
+                'P' => 'Р', 'X' => 'Х', 'Y' => 'У', 'K' => 'К',
+                'H' => 'Н', 'B' => 'В', 'M' => 'М', 'T' => 'Т',
+                'h' => 'н', 'b' => 'в', 'm' => 'м', 't' => 'т',
+                _ => chars[i]
+            };
+        }
+        return new string(chars);
+    }
+
+    private static readonly string LatinChars = "aeopcxykhbmtAEOPCXYKHBMT";
+    private static readonly string CyrillicChars = "аеорсхукнвмтАЕОРСХУКНВМТ";
+
+    [HttpGet]
+    public async Task<IActionResult> GetPlayers(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20,
+        [FromQuery] string? search = null,
+        [FromQuery] string? server = null,
+        [FromQuery] int? cls = null,
+        [FromQuery] string sortBy = "hp",
+        [FromQuery] string sortOrder = "desc",
+        [FromQuery] long? hpMin = null,
+        [FromQuery] long? hpMax = null,
+        [FromQuery] long? defenseMin = null,
+        [FromQuery] long? defenseMax = null,
+        [FromQuery] long? resistanceMin = null,
+        [FromQuery] long? resistanceMax = null,
+        [FromQuery] long? damageLowMin = null,
+        [FromQuery] long? damageHighMax = null,
+        [FromQuery] long? damageMagicLowMin = null,
+        [FromQuery] long? damageMagicHighMax = null,
+        [FromQuery] int? attackDegreeMin = null,
+        [FromQuery] int? attackDegreeMax = null,
+        [FromQuery] int? defendDegreeMin = null,
+        [FromQuery] int? defendDegreeMax = null,
+        [FromQuery] long? vigourMin = null,
+        [FromQuery] long? vigourMax = null,
+        [FromQuery] int? antiDefenseDegreeMin = null,
+        [FromQuery] int? antiDefenseDegreeMax = null,
+        [FromQuery] int? antiResistanceDegreeMin = null,
+        [FromQuery] int? antiResistanceDegreeMax = null,
+        [FromQuery] int? peakGradeMin = null,
+        [FromQuery] int? peakGradeMax = null)
+    {
+        if (page < 1) page = 1;
+        if (pageSize < 1) pageSize = 20;
+        if (!AllowedSortFields.Contains(sortBy)) sortBy = "hp";
+        var isDesc = !sortOrder.Equals("asc", StringComparison.OrdinalIgnoreCase);
+
+        var parameters = new List<object>();
+        var conditions = new List<string>();
+        var paramIndex = 0;
+
+        // Base query with LEFT JOINs
+        var sql = """
+            SELECT
+                p."Id",
+                p."Name",
+                p."Cls",
+                p."Server",
+                tm."TeamId",
+                t."Name" AS "TeamName",
+                pp."Hp",
+                pp."Mp",
+                pp."DamageLow",
+                pp."DamageHigh",
+                pp."DamageMagicLow",
+                pp."DamageMagicHigh",
+                pp."Defense",
+                pp."Resistance",
+                pp."AttackDegree",
+                pp."DefendDegree",
+                pp."Vigour",
+                pp."AntiDefenseDegree",
+                pp."AntiResistanceDegree",
+                pp."PeakGrade",
+                pp."UpdatedAt" AS "PropertiesUpdatedAt"
+            FROM players p
+            LEFT JOIN player_properties pp ON pp."PlayerId" = p."Id" AND pp."Server" = p."Server"
+            LEFT JOIN arena_team_members tm ON tm."PlayerId" = p."Id" AND tm."PlayerServer" = p."Server"
+            LEFT JOIN arena_teams t ON t."Id" = tm."TeamId"
+            """;
+
+        // Server filter
+        if (!string.IsNullOrWhiteSpace(server))
+        {
+            conditions.Add($"p.\"Server\" = @p{paramIndex}");
+            parameters.Add(new Npgsql.NpgsqlParameter($"p{paramIndex}", server));
+            paramIndex++;
+        }
+
+        // Class filter
+        if (cls.HasValue)
+        {
+            conditions.Add($"p.\"Cls\" = @p{paramIndex}");
+            parameters.Add(new Npgsql.NpgsqlParameter($"p{paramIndex}", cls.Value));
+            paramIndex++;
+        }
+
+        // Fuzzy search with homoglyph normalization using PostgreSQL translate()
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var normalizedSearch = NormalizeHomoglyphs(search).ToLower();
+            conditions.Add($"lower(translate(p.\"Name\", '{LatinChars}', '{CyrillicChars}')) LIKE @p{paramIndex}");
+            parameters.Add(new Npgsql.NpgsqlParameter($"p{paramIndex}", $"%{normalizedSearch}%"));
+            paramIndex++;
         }
 
         // Property filters
-        if (p.HpMin.HasValue) extendedQuery = extendedQuery.Where(x => x.props.Hp >= p.HpMin.Value);
-        if (p.HpMax.HasValue) extendedQuery = extendedQuery.Where(x => x.props.Hp <= p.HpMax.Value);
-        
-        if (p.DefenseMin.HasValue) extendedQuery = extendedQuery.Where(x => x.props.Defense >= p.DefenseMin.Value);
-        if (p.DefenseMax.HasValue) extendedQuery = extendedQuery.Where(x => x.props.Defense <= p.DefenseMax.Value);
-
-        if (p.ResistanceMin.HasValue) extendedQuery = extendedQuery.Where(x => x.props.Resistance.Any() && x.props.Resistance.Max() >= p.ResistanceMin.Value);
-        if (p.ResistanceMax.HasValue) extendedQuery = extendedQuery.Where(x => x.props.Resistance.Any() && x.props.Resistance.Max() <= p.ResistanceMax.Value);
-
-        if (p.DamageLowMin.HasValue) extendedQuery = extendedQuery.Where(x => x.props.DamageLow >= p.DamageLowMin.Value);
-        if (p.DamageHighMax.HasValue) extendedQuery = extendedQuery.Where(x => x.props.DamageHigh <= p.DamageHighMax.Value);
-
-        if (p.DamageMagicLowMin.HasValue) extendedQuery = extendedQuery.Where(x => x.props.DamageMagicLow >= p.DamageMagicLowMin.Value);
-        if (p.DamageMagicHighMax.HasValue) extendedQuery = extendedQuery.Where(x => x.props.DamageMagicHigh <= p.DamageMagicHighMax.Value);
-
-        if (p.AttackDegreeMin.HasValue) extendedQuery = extendedQuery.Where(x => x.props.AttackDegree >= p.AttackDegreeMin.Value);
-        if (p.AttackDegreeMax.HasValue) extendedQuery = extendedQuery.Where(x => x.props.AttackDegree <= p.AttackDegreeMax.Value);
-
-        if (p.DefendDegreeMin.HasValue) extendedQuery = extendedQuery.Where(x => x.props.DefendDegree >= p.DefendDegreeMin.Value);
-        if (p.DefendDegreeMax.HasValue) extendedQuery = extendedQuery.Where(x => x.props.DefendDegree <= p.DefendDegreeMax.Value);
-
-        if (p.VigourMin.HasValue) extendedQuery = extendedQuery.Where(x => x.props.Vigour >= p.VigourMin.Value);
-        if (p.VigourMax.HasValue) extendedQuery = extendedQuery.Where(x => x.props.Vigour <= p.VigourMax.Value);
-
-        if (p.AntiDefenseDegreeMin.HasValue) extendedQuery = extendedQuery.Where(x => x.props.AntiDefenseDegree >= p.AntiDefenseDegreeMin.Value);
-        if (p.AntiDefenseDegreeMax.HasValue) extendedQuery = extendedQuery.Where(x => x.props.AntiDefenseDegree <= p.AntiDefenseDegreeMax.Value);
-
-        if (p.AntiResistanceDegreeMin.HasValue) extendedQuery = extendedQuery.Where(x => x.props.AntiResistanceDegree >= p.AntiResistanceDegreeMin.Value);
-        if (p.AntiResistanceDegreeMax.HasValue) extendedQuery = extendedQuery.Where(x => x.props.AntiResistanceDegree <= p.AntiResistanceDegreeMax.Value);
-
-        if (p.PeakGradeMin.HasValue) extendedQuery = extendedQuery.Where(x => x.props.PeakGrade >= p.PeakGradeMin.Value);
-        if (p.PeakGradeMax.HasValue) extendedQuery = extendedQuery.Where(x => x.props.PeakGrade <= p.PeakGradeMax.Value);
-
-        // Sorting
-        var isAsc = p.SortOrder?.ToLower() == "asc";
-        
-        extendedQuery = p.SortBy.ToLower() switch
+        void AddFilter(string column, string op, object value)
         {
-            "hp" => isAsc ? extendedQuery.OrderBy(x => x.props.Hp) : extendedQuery.OrderByDescending(x => x.props.Hp),
-            "defense" => isAsc ? extendedQuery.OrderBy(x => x.props.Defense) : extendedQuery.OrderByDescending(x => x.props.Defense),
-            "resistance" => isAsc ? extendedQuery.OrderBy(x => x.props.Resistance.Max()) : extendedQuery.OrderByDescending(x => x.props.Resistance.Max()),
-            "damage" => isAsc 
-                ? extendedQuery.OrderBy(x => (x.props.DamageLow + x.props.DamageHigh) / 2.0) 
-                : extendedQuery.OrderByDescending(x => (x.props.DamageLow + x.props.DamageHigh) / 2.0),
-            "damagemagic" => isAsc 
-                ? extendedQuery.OrderBy(x => (x.props.DamageMagicLow + x.props.DamageMagicHigh) / 2.0) 
-                : extendedQuery.OrderByDescending(x => (x.props.DamageMagicLow + x.props.DamageMagicHigh) / 2.0),
-            "attackdegree" => isAsc ? extendedQuery.OrderBy(x => x.props.AttackDegree) : extendedQuery.OrderByDescending(x => x.props.AttackDegree),
-            "defenddegree" => isAsc ? extendedQuery.OrderBy(x => x.props.DefendDegree) : extendedQuery.OrderByDescending(x => x.props.DefendDegree),
-            "vigour" => isAsc ? extendedQuery.OrderBy(x => x.props.Vigour) : extendedQuery.OrderByDescending(x => x.props.Vigour),
-            "antidefensedegree" => isAsc ? extendedQuery.OrderBy(x => x.props.AntiDefenseDegree) : extendedQuery.OrderByDescending(x => x.props.AntiDefenseDegree),
-            "antiresistancedegree" => isAsc ? extendedQuery.OrderBy(x => x.props.AntiResistanceDegree) : extendedQuery.OrderByDescending(x => x.props.AntiResistanceDegree),
-            "peakgrade" => isAsc ? extendedQuery.OrderBy(x => x.props.PeakGrade) : extendedQuery.OrderByDescending(x => x.props.PeakGrade),
-            _ => isAsc ? extendedQuery.OrderBy(x => x.props.Hp) : extendedQuery.OrderByDescending(x => x.props.Hp)
+            conditions.Add($"pp.\"{column}\" {op} @p{paramIndex}");
+            parameters.Add(new Npgsql.NpgsqlParameter($"p{paramIndex}", value));
+            paramIndex++;
+        }
+
+        if (hpMin.HasValue) AddFilter("Hp", ">=", hpMin.Value);
+        if (hpMax.HasValue) AddFilter("Hp", "<=", hpMax.Value);
+        if (defenseMin.HasValue) AddFilter("Defense", ">=", defenseMin.Value);
+        if (defenseMax.HasValue) AddFilter("Defense", "<=", defenseMax.Value);
+        if (damageLowMin.HasValue) AddFilter("DamageLow", ">=", damageLowMin.Value);
+        if (damageHighMax.HasValue) AddFilter("DamageHigh", "<=", damageHighMax.Value);
+        if (damageMagicLowMin.HasValue) AddFilter("DamageMagicLow", ">=", damageMagicLowMin.Value);
+        if (damageMagicHighMax.HasValue) AddFilter("DamageMagicHigh", "<=", damageMagicHighMax.Value);
+        if (attackDegreeMin.HasValue) AddFilter("AttackDegree", ">=", attackDegreeMin.Value);
+        if (attackDegreeMax.HasValue) AddFilter("AttackDegree", "<=", attackDegreeMax.Value);
+        if (defendDegreeMin.HasValue) AddFilter("DefendDegree", ">=", defendDegreeMin.Value);
+        if (defendDegreeMax.HasValue) AddFilter("DefendDegree", "<=", defendDegreeMax.Value);
+        if (vigourMin.HasValue) AddFilter("Vigour", ">=", vigourMin.Value);
+        if (vigourMax.HasValue) AddFilter("Vigour", "<=", vigourMax.Value);
+        if (antiDefenseDegreeMin.HasValue) AddFilter("AntiDefenseDegree", ">=", antiDefenseDegreeMin.Value);
+        if (antiDefenseDegreeMax.HasValue) AddFilter("AntiDefenseDegree", "<=", antiDefenseDegreeMax.Value);
+        if (antiResistanceDegreeMin.HasValue) AddFilter("AntiResistanceDegree", ">=", antiResistanceDegreeMin.Value);
+        if (antiResistanceDegreeMax.HasValue) AddFilter("AntiResistanceDegree", "<=", antiResistanceDegreeMax.Value);
+        if (peakGradeMin.HasValue) AddFilter("PeakGrade", ">=", peakGradeMin.Value);
+        if (peakGradeMax.HasValue) AddFilter("PeakGrade", "<=", peakGradeMax.Value);
+
+        // Resistance filter by max element in array
+        if (resistanceMin.HasValue)
+        {
+            conditions.Add($"(SELECT MAX(r) FROM unnest(pp.\"Resistance\") AS r) >= @p{paramIndex}");
+            parameters.Add(new Npgsql.NpgsqlParameter($"p{paramIndex}", resistanceMin.Value));
+            paramIndex++;
+        }
+        if (resistanceMax.HasValue)
+        {
+            conditions.Add($"(SELECT MAX(r) FROM unnest(pp.\"Resistance\") AS r) <= @p{paramIndex}");
+            parameters.Add(new Npgsql.NpgsqlParameter($"p{paramIndex}", resistanceMax.Value));
+            paramIndex++;
+        }
+
+        var whereClause = conditions.Count > 0 ? " WHERE " + string.Join(" AND ", conditions) : "";
+
+        // Sort expression
+        var sortExpr = sortBy.ToLower() switch
+        {
+            "hp" => "pp.\"Hp\"",
+            "defense" => "pp.\"Defense\"",
+            "resistance" => "(SELECT MAX(r) FROM unnest(pp.\"Resistance\") AS r)",
+            "damage" => "(pp.\"DamageLow\" + pp.\"DamageHigh\") / 2.0",
+            "damagemagic" => "(pp.\"DamageMagicLow\" + pp.\"DamageMagicHigh\") / 2.0",
+            "attackdegree" => "pp.\"AttackDegree\"",
+            "defenddegree" => "pp.\"DefendDegree\"",
+            "vigour" => "pp.\"Vigour\"",
+            "antidefensedegree" => "pp.\"AntiDefenseDegree\"",
+            "antiresistancedegree" => "pp.\"AntiResistanceDegree\"",
+            "peakgrade" => "pp.\"PeakGrade\"",
+            _ => "pp.\"Hp\""
         };
 
-        var total = await extendedQuery.CountAsync();
-        
-        var items = await extendedQuery
-            .Skip((page - 1) * pageSize)
-            .Take(pageSize)
-            .Select(x => new PlayerListItem
+        var direction = isDesc ? "DESC NULLS LAST" : "ASC NULLS LAST";
+
+        // Count query
+        var countSql = $"SELECT COUNT(*) FROM players p LEFT JOIN player_properties pp ON pp.\"PlayerId\" = p.\"Id\" AND pp.\"Server\" = p.\"Server\" LEFT JOIN arena_team_members tm ON tm.\"PlayerId\" = p.\"Id\" AND tm.\"PlayerServer\" = p.\"Server\" LEFT JOIN arena_teams t ON t.\"Id\" = tm.\"TeamId\"{whereClause}";
+
+        await using var connection = db.Database.GetDbConnection();
+        await connection.OpenAsync();
+
+        await using var countCmd = connection.CreateCommand();
+        countCmd.CommandText = countSql;
+        foreach (var p in parameters)
+            countCmd.Parameters.Add(CloneParameter((Npgsql.NpgsqlParameter)p));
+        var total = Convert.ToInt64(await countCmd.ExecuteScalarAsync());
+
+        // Data query
+        var dataSql = $"{sql}{whereClause} ORDER BY {sortExpr} {direction} LIMIT @pLimit OFFSET @pOffset";
+
+        await using var dataCmd = connection.CreateCommand();
+        dataCmd.CommandText = dataSql;
+        foreach (var p in parameters)
+            dataCmd.Parameters.Add(CloneParameter((Npgsql.NpgsqlParameter)p));
+        dataCmd.Parameters.Add(new Npgsql.NpgsqlParameter("pLimit", pageSize));
+        dataCmd.Parameters.Add(new Npgsql.NpgsqlParameter("pOffset", (page - 1) * pageSize));
+
+        var items = new List<object>();
+        await using var reader = await dataCmd.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+        {
+            var hasProperties = !reader.IsDBNull(reader.GetOrdinal("Hp"));
+            object? properties = null;
+            if (hasProperties)
             {
-                Id = x.player.Id,
-                Name = x.player.Name,
-                Cls = x.player.Cls,
-                Server = x.player.Server,
-                TeamId = x.team != null ? x.team.Id : null,
-                TeamName = x.team != null ? x.team.Name : null,
-                Properties = x.props != null ? new PlayerPropertiesDto
+                properties = new
                 {
-                    Hp = x.props.Hp,
-                    Mp = x.props.Mp,
-                    DamageLow = x.props.DamageLow,
-                    DamageHigh = x.props.DamageHigh,
-                    DamageMagicLow = x.props.DamageMagicLow,
-                    DamageMagicHigh = x.props.DamageMagicHigh,
-                    Defense = x.props.Defense,
-                    Resistance = x.props.Resistance,
-                    AttackDegree = x.props.AttackDegree,
-                    DefendDegree = x.props.DefendDegree,
-                    Vigour = x.props.Vigour,
-                    AntiDefenseDegree = x.props.AntiDefenseDegree,
-                    AntiResistanceDegree = x.props.AntiResistanceDegree,
-                    PeakGrade = x.props.PeakGrade,
-                    UpdatedAt = x.props.UpdatedAt
-                } : null
-            })
-            .ToListAsync();
+                    hp = reader.GetInt64(reader.GetOrdinal("Hp")),
+                    mp = reader.GetInt64(reader.GetOrdinal("Mp")),
+                    damageLow = reader.GetInt64(reader.GetOrdinal("DamageLow")),
+                    damageHigh = reader.GetInt64(reader.GetOrdinal("DamageHigh")),
+                    damageMagicLow = reader.GetInt64(reader.GetOrdinal("DamageMagicLow")),
+                    damageMagicHigh = reader.GetInt64(reader.GetOrdinal("DamageMagicHigh")),
+                    defense = reader.GetInt64(reader.GetOrdinal("Defense")),
+                    resistance = reader.IsDBNull(reader.GetOrdinal("Resistance"))
+                        ? Array.Empty<long>()
+                        : (long[])reader.GetValue(reader.GetOrdinal("Resistance")),
+                    attackDegree = reader.GetInt32(reader.GetOrdinal("AttackDegree")),
+                    defendDegree = reader.GetInt32(reader.GetOrdinal("DefendDegree")),
+                    vigour = reader.GetInt64(reader.GetOrdinal("Vigour")),
+                    antiDefenseDegree = reader.GetInt32(reader.GetOrdinal("AntiDefenseDegree")),
+                    antiResistanceDegree = reader.GetInt32(reader.GetOrdinal("AntiResistanceDegree")),
+                    peakGrade = reader.GetInt32(reader.GetOrdinal("PeakGrade")),
+                    updatedAt = reader.GetDateTime(reader.GetOrdinal("PropertiesUpdatedAt"))
+                };
+            }
+
+            items.Add(new
+            {
+                id = reader.GetInt64(reader.GetOrdinal("Id")),
+                name = reader.IsDBNull(reader.GetOrdinal("Name")) ? null : reader.GetString(reader.GetOrdinal("Name")),
+                cls = reader.GetInt32(reader.GetOrdinal("Cls")),
+                server = reader.IsDBNull(reader.GetOrdinal("Server")) ? null : reader.GetString(reader.GetOrdinal("Server")),
+                teamId = reader.IsDBNull(reader.GetOrdinal("TeamId")) ? (long?)null : reader.GetInt64(reader.GetOrdinal("TeamId")),
+                teamName = reader.IsDBNull(reader.GetOrdinal("TeamName")) ? null : reader.GetString(reader.GetOrdinal("TeamName")),
+                properties
+            });
+        }
 
         return Ok(new
         {
@@ -239,5 +268,13 @@ public class PlayersController(TrackerDbContext db) : ControllerBase
             pageSize,
             items
         });
+    }
+
+    private static Npgsql.NpgsqlParameter CloneParameter(Npgsql.NpgsqlParameter source)
+    {
+        return new Npgsql.NpgsqlParameter(source.ParameterName, source.NpgsqlDbType)
+        {
+            Value = source.Value
+        };
     }
 }
